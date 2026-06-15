@@ -1,0 +1,24 @@
+# FWI collection metadata, read by staging/stac_hda_fwi.py.
+# NOTE: the legacy FWI stager only consumes id / title / description /
+# short_description / daily_data_dir. The richer keys (license, providers,
+# doi, ...) are here for parity with the other apps and for the eventual
+# migration to stac_dedl_core; the legacy script ignores them for now.
+
+# Confirmed by Suraj Polade (FMI), 2026-06-11. The old EO.FMI.DAT.FWI id is stale.
+id: "EO.FMI.DAT.DESTINE_CLIMATE_WILDFIRE_FWI"
+
+title: "Wildfire Fire Weather Index (FWI) from DestinE Climate DT"
+
+description: >
+  Fire Weather Index (FWI) outputs derived from the DestinE Climate DT
+  simulations. The dataset covers daily FWI fields, annual statistics, and
+  regional daily climatologies for the historical period (1990-2014) and the
+  projection period (2015-2049), produced from the Climate DT models.
+
+short_description: "Fire Weather Index (daily fields, annual statistics, regional climatology) from the DestinE Climate DT simulations."
+
+# Source directory holding the raw FWI NetCDF output
+# (<daily_data_dir>/<model>/*/member01/ for daily files and
+#  <daily_data_dir>/<model>/Annual_Stat/ for annual statistics).
+# Override per machine; this default mirrors the FMI HPC path.
+daily_data_dir: "/scratch/project_465000454/poladesu/ReRuns_FWI"

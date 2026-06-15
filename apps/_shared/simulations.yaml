@@ -1,0 +1,121 @@
+# Shared Climate DT simulation definitions for all STAC apps.
+# Keys are referenced from each app's catalog_config.yaml `simulations:` list.
+# Canonical experiment spellings: hist / cont / SSP3-7.0 (follow hydroland's
+# published items). Values here must be identical wherever the run is used;
+# app-specific fields (e.g. resolution high vs 5km) belong in each app's
+# `overrides:` section instead.
+
+# ── Generation 2: historical / control / projection ──────────────────
+
+ifs-nemo_generation-2_historical:
+  model: IFS-NEMO
+  experiment: hist
+  generation: 2
+  realization: 1
+  activity: baseline
+  start_year: 1990
+  end_year: 2014
+
+ifs-nemo_generation-2_control:
+  model: IFS-NEMO
+  experiment: cont
+  generation: 2
+  realization: 1
+  activity: baseline
+  start_year: 1990
+  end_year: 2014
+
+ifs-nemo_generation-2_projection:
+  model: IFS-NEMO
+  experiment: SSP3-7.0
+  generation: 2
+  realization: 1
+  activity: projections
+  start_year: 2015
+  end_year: 2049
+
+ifs-fesom_generation-2_historical:
+  model: IFS-FESOM
+  experiment: hist
+  generation: 2
+  realization: 1
+  activity: baseline
+  start_year: 1990
+  end_year: 2014
+
+ifs-fesom_generation-2_control:
+  model: IFS-FESOM
+  experiment: cont
+  generation: 2
+  realization: 1
+  activity: baseline
+  start_year: 1990
+  end_year: 2014
+
+ifs-fesom_generation-2_projection:
+  model: IFS-FESOM
+  experiment: SSP3-7.0
+  generation: 2
+  realization: 1
+  activity: projections
+  start_year: 2015
+  end_year: 2049
+
+icon_generation-2_historical:
+  model: ICON
+  experiment: hist
+  generation: 2
+  realization: 1
+  activity: baseline
+  start_year: 1990
+  end_year: 2014
+
+icon_generation-2_control:
+  model: ICON
+  experiment: cont
+  generation: 2
+  realization: 1
+  activity: baseline
+  start_year: 1990
+  end_year: 2014
+
+icon_generation-2_projection:
+  model: ICON
+  experiment: SSP3-7.0
+  generation: 2
+  realization: 1
+  activity: projections
+  start_year: 2015
+  end_year: 2049
+
+# ── Storyline runs (IFS-FESOM, story nudging, 5 realizations) ─────────
+
+storylines-hist:
+  model: IFS-FESOM
+  experiment: hist
+  generation: 2
+  realization: [1, 2, 3, 4, 5]
+  activity: story-nudging
+  resolution: standard
+  start_year: 2017
+  end_year: 2026
+
+storylines-cont:
+  model: IFS-FESOM
+  experiment: cont
+  generation: 2
+  realization: [1, 2, 3, 4, 5]
+  activity: story-nudging
+  resolution: standard
+  start_year: 2017
+  end_year: 2026
+
+storylines-plus2K:
+  model: IFS-FESOM
+  experiment: Tplus2.0K
+  generation: 2
+  realization: [1, 2, 3, 4, 5]
+  activity: story-nudging
+  resolution: standard
+  start_year: 2017
+  end_year: 2026
