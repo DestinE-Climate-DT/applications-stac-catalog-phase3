@@ -1,9 +1,0 @@
-{
-    "id": "EO.ORG.DAT.YOUR_APP",
-    "item_folder_level": "MM",
-    "item_config_optional": false,
-    "item_asset_ignore_list": ["item_config.json"],
-    "thumbnail_regex": "^thumbnail",
-    "overview_regex": "^overview",
-    "additional_property_keys": ["model", "experiment", "generation", "realization", "activity", "resolution"]
-}
