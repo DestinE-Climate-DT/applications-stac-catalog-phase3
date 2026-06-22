@@ -1,35 +1,61 @@
 #!/usr/bin/env bash
-# Wildfire FWI STAC Catalog pipeline — 3 steps: stage → generate → upload
-# Run from this directory: bash run_pipeline.sh
+# Wraps stage.py + update.py + upload. Run staging/move.py separately in
+# between (it needs explicit --generation/--realization/--resolution flags,
+# see apps/RUN_GUIDE.md and this app's run_*.ipynb notebook or run_example.sh) — this script does not move any NC files.
+# All input lives in catalog_config.yaml; credentials in .env.
+#
+#   bash run_pipeline.sh                    # stage (dry run) — show the plan
+#   bash run_pipeline.sh --execute          # stage + generate items
+#   bash run_pipeline.sh --execute --upload # stage + generate + upload
+#   bash run_pipeline.sh --execute --upload --year 1995
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
 
-# Load credentials from .env
-if [ -f "${SCRIPT_DIR}/.env" ]; then
-  export $(grep -v '^#' "${SCRIPT_DIR}/.env" | xargs)
+if [ -f .env ]; then
+  set -o allexport
+  # shellcheck disable=SC1091
+  source .env
+  set +o allexport
 fi
 
-# ── Configure these paths for your HPC environment ────────────────────────────
-COLLECTION_ID="EO.FMI.DAT.DESTINE_CLIMATE_WILDFIRE_FWI"  # confirmed by Suraj Polade (FMI), 2026-06-11
-FWI_DATA_DIR="/path/to/fwi/output"   # root dir with daily/annual FWI NetCDF files
-CATALOG_HOME_DIR="${SCRIPT_DIR}"
-# ──────────────────────────────────────────────────────────────────────────────
+EXECUTE=0
+UPLOAD=0
+YEAR=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --execute) EXECUTE=1 ;;
+    --upload)  UPLOAD=1 ;;
+    --year)    [[ "$2" =~ ^[0-9]{4}$ ]] || { echo "--year must be a 4-digit year" >&2; exit 1; }; YEAR="$2"; shift ;;
+    *) echo "Unknown argument: $1" >&2; exit 1 ;;
+  esac
+  shift
+done
 
-cd "${CATALOG_HOME_DIR}"
+if [ "${UPLOAD}" -eq 1 ] && [ "${EXECUTE}" -eq 0 ]; then
+  echo "--upload requires --execute (items must be generated before uploading)" >&2
+  exit 1
+fi
 
-echo "=== Step 1: Stage data (create STAC folder structure + symlinks) ==="
-# stac_hda_fwi.py stages data using hard-links/symlinks to avoid duplication.
-# Edit the paths inside staging/stac_hda_fwi.py for your environment.
-python "${SCRIPT_DIR}/staging/stac_hda_fwi.py"
+COLLECTION_ID="$(python -c "import yaml; print(yaml.safe_load(open('catalog_config.yaml'))['id'])")"
+CATALOG_HOME_DIR="${CATALOG_HOME_DIR:-$(python -c "import yaml; d=yaml.safe_load(open('catalog_config.yaml')); print(d.get('catalog_home_dir', '.'))")}"
 
-echo "=== Step 2: Generate STAC item metadata ==="
-# FWI has a customised generate_item_metadata.py in staging/ that handles
-# daily + annual + regional products. Use it instead of the shared one.
-python "${SCRIPT_DIR}/staging/generate_item_metadata.py"
+echo "=== Step 1: Stage (${COLLECTION_ID}) ==="
+STAGE_ARGS=()
+[ "${EXECUTE}" -eq 1 ] && STAGE_ARGS+=(--execute)
+python staging/stage.py "${STAGE_ARGS[@]}"
 
-echo "=== Step 3: Upload to DEDL S3 ==="
-# s3cmd --config ~/.s3cfg sync ${COLLECTION_ID}/ s3://usergenerated-proposal-$(echo ${COLLECTION_ID} | tr '[:upper:]' '[:lower:]')/
-echo "Upload step — edit run_pipeline.sh to enable"
+if [ "${EXECUTE}" -eq 1 ]; then
+  echo "=== Step 2: Generate STAC item metadata ==="
+  python staging/update.py
+fi
+
+if [ "${UPLOAD}" -eq 1 ]; then
+  echo "=== Step 3: Upload to DEDL S3 ==="
+  UPLOAD_ARGS=("${COLLECTION_ID}" --root "${CATALOG_HOME_DIR}/${COLLECTION_ID}" --execute)
+  [ -n "${YEAR}" ] && UPLOAD_ARGS+=(--year "${YEAR}")
+  python -m stac_dedl_core.upload "${UPLOAD_ARGS[@]}"
+fi
 
 echo "=== Pipeline complete ==="

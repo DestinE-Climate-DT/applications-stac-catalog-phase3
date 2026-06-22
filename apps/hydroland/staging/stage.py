@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """HydroLand staging on top of stac_dedl_core.
 
-Reads ../catalog_config.yaml, writes collection metadata, creates one
-period-level catalog folder per simulation, and (with --restructure)
-materialises monthly mHM/mRM NetCDF files into the data/YYYY/MM/<item>/
-layout. Dry run by default; pass --execute to apply changes.
-
-Only HydroLand-specific knowledge lives here: the mHM/mRM filename patterns
-and the legacy year-level folder layout.
+Reads ../catalog_config.yaml, writes collection metadata, and creates the
+full data/YYYY/MM/<item>/ skeleton for every simulation × month × data_type.
+Dry run by default; pass --execute to apply changes.
 """
 from __future__ import annotations
 
@@ -17,14 +13,13 @@ import logging
 import re
 from pathlib import Path
 
-from stac_dedl_core.appconfig import AppConfig, load_app_config
+from stac_dedl_core.appconfig import AppConfig, Simulation, load_app_config
 from stac_dedl_core.collection_builder import write_collection_files
 from stac_dedl_core.staging import (
     build_item_folder_name,
-    classify_data_type,
-    join_item_folder_name,
     materialize_file,
     ordered_properties,
+    setup_logging,
 )
 
 APP_DIR = Path(__file__).resolve().parents[1]
@@ -159,14 +154,17 @@ def stage_indicators(
     markers = ind.get("scenario_markers", ["scen", "percent_change"])
     base_order = [k for k in cfg.property_order if k != "data_type"]
 
-    def simulation_for(token: str):
+    def simulation_for(token: str) -> Simulation | None:
         is_scenario = any(marker in token for marker in markers)
         key = scen_key if is_scenario else ref_key
         if key not in sims_by_key:
-            raise KeyError(
-                f"indicators references simulation '{key}', which is not in the "
-                f"catalog_config.yaml `simulations:` list ({sorted(sims_by_key)})."
+            logger.warning(
+                "Skipping indicator file with token '%s': simulation '%s' is not "
+                "in the active catalog_config.yaml `simulations:` list (%s). "
+                "Uncomment it there to stage this indicator.",
+                token, key, sorted(sims_by_key),
             )
+            return None
         return sims_by_key[key]
 
     data_dir = cfg.collection_dir / "data"
@@ -176,9 +174,12 @@ def stage_indicators(
             stats["ignored"] += 1
             logger.debug("Ignoring unrecognized indicator filename: %s", asset_path.name)
             continue
-        stats["recognized"] += 1
 
         sim = simulation_for(parsed["token"])
+        if sim is None:
+            stats["ignored"] += 1
+            continue
+        stats["recognized"] += 1
         properties = dict(ordered_properties(sim.properties, base_order))
         properties["data_type"] = parsed["token"]
         item_name = build_item_folder_name(
@@ -193,96 +194,69 @@ def stage_indicators(
     return stats
 
 
-def create_catalog_folders(cfg: AppConfig, execute: bool = False) -> list[Path]:
-    """Create data/<start_year>/<period item folder> for every simulation."""
-    created: list[Path] = []
+def create_monthly_skeleton(cfg: AppConfig, execute: bool = False) -> dict[str, int]:
+    """Create data/YYYY/MM/<item>/ for every simulation × month × data_type.
+
+    Data types are read from cfg.data_type_rules (unique 'data_type' values in
+    declaration order). Falls back to ['mhm', 'mrm'] when no rules are defined.
+    """
+    if cfg.data_type_rules:
+        seen: dict[str, None] = {}
+        for rule in cfg.data_type_rules:
+            seen.setdefault(rule["data_type"])
+        data_types = list(seen)
+    else:
+        data_types = ["mhm", "mrm"]
+
     base_order = [k for k in cfg.property_order if k != "data_type"]
-    for sim in cfg.simulations:
-        name = build_item_folder_name(
-            cfg.id,
-            f"{sim.start_year}0101T000000",
-            f"{sim.end_year}1231T230000",
-            ordered_properties(sim.properties, base_order),
-        )
-        target = cfg.collection_dir / "data" / str(sim.start_year) / name
-        logger.info("%sCatalog folder: %s", "" if execute else "[DRY RUN] ", target)
-        if execute:
-            target.mkdir(parents=True, exist_ok=True)
-        created.append(target)
-    return created
-
-
-def restructure_existing_data(
-    cfg: AppConfig, link_mode: str = "symlink", execute: bool = False
-) -> dict[str, int]:
-    """Materialise monthly files from year-level item folders into YYYY/MM items."""
     data_dir = cfg.collection_dir / "data"
-    stats = {
-        "source_item_folders": 0,
-        "recognized_files": 0,
-        "created_links": 0,
-        "skipped_existing": 0,
-        "ignored_files": 0,
-    }
+    stats: dict[str, int] = {"total": 0, "created": 0, "existing": 0}
 
-    if not data_dir.is_dir():
-        logger.info("No data directory at %s yet — nothing to restructure.", data_dir)
-        return stats
+    for sim in cfg.simulations:
+        base_props = ordered_properties(sim.properties, base_order)
+        n_months = (sim.end_year - sim.start_year + 1) * 12
+        first_example: str | None = None
 
-    for year_dir in sorted(p for p in data_dir.iterdir() if p.is_dir()):
-        for source_item_dir in sorted(p for p in year_dir.iterdir() if p.is_dir()):
-            if not source_item_dir.name.startswith(f"{cfg.id}_"):
-                continue
-            stats["source_item_folders"] += 1
-            suffix_parts = source_item_dir.name.split("__")[1:]
-            expected_parts = len([k for k in cfg.property_order if k != "data_type"])
-            if len(suffix_parts) != expected_parts:
-                logger.warning(
-                    "Expected %s suffix parts for %s but found %s. "
-                    "Continuing with folder-derived values.",
-                    expected_parts,
-                    source_item_dir.name,
-                    len(suffix_parts),
-                )
-
-            for asset_path in sorted(p for p in source_item_dir.rglob("*") if p.is_file()):
-                parsed = parse_monthly_asset_filename(asset_path.name)
-                if not parsed:
-                    stats["ignored_files"] += 1
-                    logger.debug("Ignoring non-monthly asset during restructure: %s", asset_path)
-                    continue
-                stats["recognized_files"] += 1
-
-                # data_type defaults to the mHM/mRM token parsed from the filename,
-                # but config-driven data_type_rules (if any) take precedence so apps
-                # can add dimensions like river_discharge/soil_moisture from config.
-                data_type = classify_data_type(
-                    asset_path, cfg.data_type_rules, default=parsed["data_type"]
-                )
-                item_suffix = list(suffix_parts)
-                if cfg.split_data_type_items:
-                    item_suffix.append(data_type)
-
-                target = (
-                    data_dir
-                    / parsed["year"]
-                    / parsed["month"]
-                    / join_item_folder_name(
-                        cfg.id,
-                        parsed["start_timestamp"],
-                        parsed["end_timestamp"],
-                        item_suffix,
+        for year in range(sim.start_year, sim.end_year + 1):
+            for month in range(1, 13):
+                last_day = calendar.monthrange(year, month)[1]
+                start = f"{year}{month:02d}01T000000"
+                end = f"{year}{month:02d}{last_day:02d}T230000"
+                for data_type in data_types:
+                    props = {**base_props, "data_type": data_type}
+                    name = build_item_folder_name(
+                        cfg.id, start, end,
+                        ordered_properties(props, cfg.property_order),
                     )
-                    / asset_path.name
-                )
-                if materialize_file(asset_path, target, mode=link_mode, execute=execute):
-                    stats["created_links"] += 1
-                    logger.info(
-                        "%s%s -> %s", "" if execute else "[DRY RUN] ", asset_path, target
+                    item_dir = data_dir / str(year) / f"{month:02d}" / name
+                    if first_example is None:
+                        first_example = str(item_dir)
+                    stats["total"] += 1
+                    if item_dir.exists():
+                        stats["existing"] += 1
+                    elif execute:
+                        item_dir.mkdir(parents=True, exist_ok=True)
+                        stats["created"] += 1
+                    # individual paths logged at DEBUG only to avoid flooding
+                    logger.debug(
+                        "%s%s",
+                        "" if execute else "[DRY RUN] would create: ",
+                        item_dir,
                     )
-                else:
-                    stats["skipped_existing"] += 1
+
+        label = f"{sim.properties.get('model', '?')} {sim.properties.get('experiment', '?')} ({sim.start_year}-{sim.end_year})"
+        n_folders = n_months * len(data_types)
+        if execute:
+            logger.info("Skeleton %s: %s folders created", label, n_folders)
+        else:
+            logger.info(
+                "[DRY RUN] Skeleton %s: would create %s folders (data types: %s)\n"
+                "          Example: %s",
+                label, n_folders, ", ".join(data_types), first_example,
+            )
+
     return stats
+
 
 
 def main() -> int:
@@ -293,25 +267,12 @@ def main() -> int:
         help="Apply changes. Without this flag everything is a dry run.",
     )
     parser.add_argument(
-        "--restructure",
-        action="store_true",
-        help="Materialise monthly files from legacy year-level item folders.",
-    )
-    parser.add_argument(
-        "--link-mode",
-        default="symlink",
-        choices=["symlink", "hardlink", "copy", "move"],
-    )
-    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
     )
     args = parser.parse_args()
-
-    logging.basicConfig(
-        level=getattr(logging, args.log_level), format="%(levelname)s | %(message)s"
-    )
+    setup_logging("hydroland-stage", args.log_level)
 
     cfg = load_app_config(APP_DIR)
     logger.info("Collection: %s (%s simulations)", cfg.id, len(cfg.simulations))
@@ -322,18 +283,10 @@ def main() -> int:
     else:
         logger.info("[DRY RUN] Would write collection.json + collection_config.json")
 
-    create_catalog_folders(cfg, execute=args.execute)
-
-    if args.restructure:
-        stats = restructure_existing_data(
-            cfg, link_mode=args.link_mode, execute=args.execute
-        )
-        logger.info("Restructure summary: %s", stats)
+    create_monthly_skeleton(cfg, execute=args.execute)
 
     if cfg.indicators:
-        ind_stats = stage_indicators(
-            cfg, link_mode=args.link_mode, execute=args.execute
-        )
+        ind_stats = stage_indicators(cfg, execute=args.execute)
         logger.info("Indicator staging summary: %s", ind_stats)
 
     if not args.execute:

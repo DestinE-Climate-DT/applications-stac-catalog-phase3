@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Standard 3-step STAC pipeline: stage → generate → upload.
+# Wraps stage.py + update.py + upload. Run staging/move.py separately in
+# between (it needs explicit --model/--experiment/... per source directory,
+# see apps/RUN_GUIDE.md and this app's run_*.ipynb notebook or run_example.sh) — this script does not move any NC files.
 # All input lives in catalog_config.yaml; credentials in .env.
 #
 #   bash run_pipeline.sh                    # stage (dry run) — show the plan
@@ -40,17 +42,13 @@ COLLECTION_ID="$(python -c "import yaml; print(yaml.safe_load(open('catalog_conf
 CATALOG_HOME_DIR="${CATALOG_HOME_DIR:-$(python -c "import yaml; d=yaml.safe_load(open('catalog_config.yaml')); print(d.get('catalog_home_dir', '.'))")}"
 
 echo "=== Step 1: Stage (${COLLECTION_ID}) ==="
-STAGE_ARGS=(--restructure)
+STAGE_ARGS=()
 [ "${EXECUTE}" -eq 1 ] && STAGE_ARGS+=(--execute)
 python staging/stage.py "${STAGE_ARGS[@]}"
 
 if [ "${EXECUTE}" -eq 1 ]; then
   echo "=== Step 2: Generate STAC item metadata ==="
-  (cd "${CATALOG_HOME_DIR}" && python -c "
-import sys
-from stac_dedl_core import ItemGenerator
-ItemGenerator(sys.argv[1]).run()
-" "${COLLECTION_ID}")
+  python staging/update.py
 fi
 
 if [ "${UPLOAD}" -eq 1 ]; then

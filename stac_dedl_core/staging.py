@@ -6,6 +6,8 @@ Promoted from apps/hydroland/staging/hydroland_data_preparation.py.
 """
 from __future__ import annotations
 
+import argparse
+import logging
 import os
 import re
 import shutil
@@ -140,3 +142,60 @@ def materialize_file(
     else:  # move
         shutil.move(source, target)
     return True
+
+
+def setup_logging(name: str, level_name: str = "INFO") -> logging.Logger:
+    """Configure root logging once and return a named logger for a script.
+
+    Shared by every app's stage.py/move.py/update.py so the log format stays
+    consistent without each script repeating the same basicConfig call.
+    """
+    logging.basicConfig(
+        level=getattr(logging, level_name.upper(), logging.INFO),
+        format="%(levelname)s | %(message)s",
+    )
+    return logging.getLogger(name)
+
+
+def add_mode_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add the required, mutually exclusive --link/--copy/--move flags.
+
+    Used by every app's move.py. There is intentionally no default: a script
+    that materialises files must say how, so a missing flag fails loudly
+    instead of silently picking a mode.
+    """
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
+        "--link",
+        action="store_true",
+        help="Create a symlink in the catalog pointing at the source file. Source is never touched.",
+    )
+    mode_group.add_argument(
+        "--copy",
+        action="store_true",
+        help="Copy the file into the catalog. Source is kept in place.",
+    )
+    mode_group.add_argument(
+        "--move",
+        action="store_true",
+        help="Move the file into the catalog. Source is removed.",
+    )
+
+
+def mode_from_args(args: argparse.Namespace) -> str:
+    """Map parsed --link/--copy/--move flags to a materialize_file() mode."""
+    if args.link:
+        return "symlink"
+    if args.copy:
+        return "copy"
+    return "move"
+
+
+def log_move_summary(logger: logging.Logger, dry_run: bool, stats: Mapping[str, int]) -> None:
+    """Print a move.py run summary from a stats dict, in insertion order.
+
+    Centralising this means adding or renaming a counter in one app's move.py
+    never requires touching a hand-formatted multi-line string.
+    """
+    lines = "\n".join(f"- {key}: {value}" for key, value in stats.items())
+    logger.info("Summary:\n- dry run: %s\n%s", dry_run, lines)

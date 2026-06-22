@@ -83,11 +83,23 @@ class AppConfig:
     related: dict | None = None
     item_config_optional: bool = True
     split_data_type_items: bool = False
+    # Optional STAC datacube extension (cube:dimensions / cube:variables), inlined
+    # as a mapping with "dimensions" and "variables" keys. When set,
+    # collection_builder adds the datacube + timestamps stac_extensions and the
+    # cube:dimensions/cube:variables fields to collection.json.
+    datacube: dict | None = None
     # Optional: staging of period-level "indicator" products that don't follow the
     # monthly layout (HydroLand floods/droughts/soil-moisture indicators). A mapping
     # with: source_dir, reference_simulation, scenario_simulation, scenario_markers.
     # See apps/hydroland/staging/stage.py:stage_indicators.
     indicators: dict | None = None
+    # Optional list of {doi, citation} mappings for collections citing more than one
+    # publication (sci:publications). Takes precedence over the single `doi:` field
+    # when set; falls back to `doi:` for apps with just one citation.
+    publications: list[dict] = field(default_factory=list)
+    # Optional explicit stac_extensions list override. When unset, the list is
+    # auto-derived from whether doi/publications and datacube are present.
+    stac_extensions: list[str] | None = None
     # Optional, config-driven classification of an asset into a data_type token
     # (e.g. mhm / mrm / river_discharge_indicators). Each rule is a mapping with
     # a "match" substring (tested against the asset's relative path) and the
@@ -264,4 +276,7 @@ def load_app_config(
         split_data_type_items=split,
         data_type_rules=data_type_rules,
         indicators=cfg.get("indicators"),
+        datacube=cfg.get("datacube"),
+        publications=cfg.get("publications") or [],
+        stac_extensions=cfg.get("stac_extensions"),
     )

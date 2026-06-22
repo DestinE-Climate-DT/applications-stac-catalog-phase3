@@ -147,83 +147,21 @@ def test_stage_indicators_maps_ref_and_scen(app_dir, tmp_path):
                for n in items)
 
 
-def test_create_catalog_folders(app_dir):
+def test_create_monthly_skeleton(app_dir):
     stage = load_stage_module()
     cfg = load_app_config(app_dir)
-    created = stage.create_catalog_folders(cfg, execute=True)
-    assert len(created) == 1
+    stats = stage.create_monthly_skeleton(cfg, execute=True)
+    # 1990-2014 = 25 years × 12 months × 2 data_types (mhm, mrm) = 600 folders
+    assert stats["total"] == 600
+    assert stats["created"] == 600
+    assert stats["existing"] == 0
     expected = (
-        cfg.collection_dir / "data" / "1990" /
-        "EO.UFZ.DAT.HYDROLAND_19900101T000000_20141231T230000"
-        "__IFS-NEMO__hist__generation-2__baseline__realization-1"
+        cfg.collection_dir / "data" / "1990" / "01" /
+        "EO.UFZ.DAT.HYDROLAND_19900101T000000_19900131T230000"
+        "__IFS-NEMO__hist__generation-2__baseline__realization-1__mhm"
     )
-    assert created[0] == expected
     assert expected.is_dir()
 
-
-def test_restructure_existing_data(app_dir):
-    stage = load_stage_module()
-    cfg = load_app_config(app_dir)
-    # legacy year-level item folder with one monthly mHM file
-    legacy = (
-        cfg.collection_dir / "data" / "1990" /
-        "EO.UFZ.DAT.HYDROLAND_19900101T000000_20141231T230000"
-        "__IFS-NEMO__hist__generation-2__baseline__realization-1"
-    )
-    legacy.mkdir(parents=True)
-    nc = legacy / "1990_01_01_T00_00_to_1990_01_31_T23_00_mHM_Fluxes_States.nc"
-    nc.write_text("nc")
-
-    stats = stage.restructure_existing_data(cfg, link_mode="symlink", execute=True)
-    assert stats["recognized_files"] == 1
-    assert stats["created_links"] == 1
-
-    target = (
-        cfg.collection_dir / "data" / "1990" / "01" /
-        "EO.UFZ.DAT.HYDROLAND_19900101T000000_19900131T230000"
-        "__IFS-NEMO__hist__generation-2__baseline__realization-1__mhm" /
-        nc.name
-    )
-    assert target.is_symlink()
-    assert target.read_text() == "nc"
-
-
-def test_restructure_without_data_type_split(app_dir):
-    stage = load_stage_module()
-    import yaml as _yaml
-    cfg_path = app_dir / "catalog_config.yaml"
-    raw = _yaml.safe_load(cfg_path.read_text())
-    raw["split_data_type_items"] = False
-    cfg_path.write_text(_yaml.safe_dump(raw))
-    from stac_dedl_core.appconfig import load_app_config as _load
-    cfg = _load(app_dir)
-
-    legacy = (
-        cfg.collection_dir / "data" / "1990" /
-        "EO.UFZ.DAT.HYDROLAND_19900101T000000_20141231T230000"
-        "__IFS-NEMO__hist__generation-2__baseline__realization-1"
-    )
-    legacy.mkdir(parents=True)
-    nc = legacy / "1990_01_01_T00_00_to_1990_01_31_T23_00_mHM_Fluxes_States.nc"
-    nc.write_text("nc")
-
-    stage.restructure_existing_data(cfg, link_mode="symlink", execute=True)
-    target = (
-        cfg.collection_dir / "data" / "1990" / "01" /
-        "EO.UFZ.DAT.HYDROLAND_19900101T000000_19900131T230000"
-        "__IFS-NEMO__hist__generation-2__baseline__realization-1" /
-        nc.name
-    )
-    assert target.is_symlink()
-
-
-def test_restructure_with_missing_data_dir_is_noop(app_dir):
-    stage = load_stage_module()
-    cfg = load_app_config(app_dir)
-    # collection dir does not exist at all — fresh dry-run scenario
-    stats = stage.restructure_existing_data(cfg, link_mode="symlink", execute=False)
-    assert stats["recognized_files"] == 0
-    assert stats["created_links"] == 0
 
 
 def test_real_app_config_loads():

@@ -57,41 +57,27 @@ item_folder_level: MM
 item_config_optional: true
 split_data_type_items: true
 
-# Optional: classify each asset into a data_type token appended to the item folder
-# (only used when split_data_type_items is true). Without rules, the data_type is
-# auto-detected from the mHM/mRM filename. Add rules to introduce new dimensions
-# (e.g. indicators) purely from config — first match wins; "match" is a substring
-# tested against the asset's relative path (so it works for filename tokens OR
-# subfolders). Example (uncomment + adapt when indicator files arrive):
-# data_type_rules:
-#   - {match: "_mHM_Fluxes_States", data_type: mhm}
-#   - {match: "_mRM_Fluxes_States", data_type: mrm}
-#   - {match: "river_discharge", data_type: river_discharge_indicators}
-#   - {match: "soil_moisture", data_type: soil_moisture_indicators}
-#   - {match: "aridity_index", data_type: aridity_index_indicators}
+# Rules to classify NC files into item data_type suffixes (see docs/RUN_GUIDE.md)
+data_type_rules:
+  - {match: "_mHM_Fluxes_States", data_type: mhm}
+  - {match: "_mRM_Fluxes_States", data_type: mrm}
 
 # HPC paths — override with env vars when running elsewhere
-app_data_dir: /work/lealroja/ifs-nemo
-catalog_home_dir: /work/lealroja/DestinE-DataLake-Lab/HDA/Usergenerated
+app_data_dir: /data/hsd/projects/destine_operational_results/ifs-nemo/phase_2/historical/mhm
+catalog_home_dir: /work/lealroja/applications-stac-catalog-phase3-execution
 
 # Control (cont) runs and storylines exist in _shared/simulations.yaml but are deliberately not published by HydroLand.
 simulations:
   - ifs-nemo_generation-2_historical
-  - ifs-nemo_generation-2_projection
-  - ifs-fesom_generation-2_historical
-  - ifs-fesom_generation-2_projection
-  - icon_generation-2_historical
-  - icon_generation-2_projection
+  # - ifs-nemo_generation-2_projection
+  # - ifs-fesom_generation-2_historical
+  # - ifs-fesom_generation-2_projection
+  # - icon_generation-2_historical
+  # - icon_generation-2_projection
 
-# Decadal indicator products (floods/droughts/soil-moisture) — staged as one
-# period-level item per file (different from the monthly mHM/mRM fluxes).
-# Filenames: YYYY_MM_YYYY_MM_<token>.nc or YYYY_YYYY_<token>.nc; <token> becomes
-# the item's data_type (e.g. aridity_index, 95th_percentile_discharge_indicators,
-# soil_moisture_deficit_ref_SWC_L01). A token containing any scenario_marker maps
-# to scenario_simulation (projection); otherwise to reference_simulation (historical).
-# Uncomment + set the path when indicator files are available:
-# indicators:
-#   source_dir: /work/lealroja/ifs-nemo/indicators
-#   reference_simulation: ifs-nemo_generation-2_historical
-#   scenario_simulation: ifs-nemo_generation-2_projection
-#   scenario_markers: [scen, percent_change]
+# Multi-year indicator products (aridity index, soil moisture, etc.) — see docs/RUN_GUIDE.md
+indicators:
+  source_dir: /work/lealroja/ifs-nemo/5km/historic_ba/hourly/indicators
+  reference_simulation: ifs-nemo_generation-2_historical
+  scenario_simulation: ifs-nemo_generation-2_projection
+  scenario_markers: [scen, percent_change]

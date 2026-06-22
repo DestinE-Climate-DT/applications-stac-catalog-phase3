@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Dry-run an app's STAC pipeline (stage + generate item metadata) against freshly
-# generated fake data. No credentials and no network are used; nothing is uploaded.
+# Dry-run an app's full STAC pipeline (stage -> move -> update) against freshly
+# generated fake data. No credentials and no network are used; nothing is
+# uploaded. All four apps use the identical stage.py/move.py/update.py pattern,
+# so this script runs the same four steps for each, just with different
+# move.py flags (see each app's run_*.ipynb notebook).
 #
-# Prerequisite:  conda activate stac-catalog   (see docs/RUN_GUIDE.md)
+# Prerequisite:  conda activate stac-catalog   (see apps/RUN_GUIDE.md)
 #
 # Usage:
 #   bash tools/dry_run.sh <app> [sandbox_dir]
@@ -31,75 +34,69 @@ count_items() {  # $1 = items dir
   echo "  -> generated ${n} item JSON(s) in $1"
 }
 
-run_hydroland() {
-  hr "HydroLand (native dry run)"
-  local SB="${SB_ROOT}/hydroland" ID="EO.UFZ.DAT.HYDROLAND"
-  mkdir -p "${SB}/appdata"
-  python "${GEN}" hydroland "${SB}"
-  ( export CATALOG_HOME_DIR="${SB}" APP_DATA_DIR="${SB}/appdata"
-    cd "${REPO}/apps/hydroland"
-    echo "--- STAGE (dry run, no --execute) ---"
-    python staging/stage.py --restructure 2>&1 | grep -iE "dry run|catalog folder" | head -4 || true
+run_app() {  # $1=app dir name  $2=collection id  $3...=extra move.py args (after --source-* and before --link)
+  local app="$1" id="$2"; shift 2
+  local SB="${SB_ROOT}/${app}"
+  mkdir -p "${SB}"
+  python "${GEN}" "${app}" "${SB}"
+
+  export CATALOG_HOME_DIR="${SB}"
+  (
+    cd "${REPO}/apps/${app}"
     echo "--- STAGE (--execute) ---"
-    python staging/stage.py --restructure --execute --link-mode copy 2>&1 | grep -iE "wrote|restructure summary" | tail -2 || true
-    echo "--- GENERATE ---"
-    cd "${SB}"
-    python -c "from stac_dedl_core import ItemGenerator; ItemGenerator('${ID}').run()" >/dev/null 2>&1 || true
+    python staging/stage.py --execute 2>&1 | grep -iE "wrote|skeleton" | head -5 || true
+    echo "--- MOVE (--link --execute) ---"
+    python staging/move.py --target-collection-dir "${SB}/${id}" "$@" --link --execute \
+      2>&1 | grep -iE "summary|linked|recognized" || true
+    echo "--- UPDATE ---"
+    python staging/update.py 2>&1 | grep -iE "done\." || true
   )
+  unset CATALOG_HOME_DIR
+  count_items "${SB}/${id}/metadata/items"
+}
+
+run_hydroland() {
+  hr "HydroLand"
+  local SB="${SB_ROOT}/hydroland" ID="EO.UFZ.DAT.HYDROLAND"
+  mkdir -p "${SB}"
+  python "${GEN}" hydroland "${SB}"
+  export CATALOG_HOME_DIR="${SB}"
+  (
+    cd "${REPO}/apps/hydroland"
+    echo "--- STAGE (--execute) ---"
+    python staging/stage.py --execute 2>&1 | grep -iE "wrote|skeleton" | head -5 || true
+    echo "--- MOVE mhm (--link --execute) ---"
+    python staging/move.py --source-flux-dir "${SB}/appdata/mhm" --target-collection-dir "${SB}/${ID}" \
+      --model IFS-NEMO --experiment hist --generation 2 --activity baseline --realization 1 \
+      --link --execute 2>&1 | grep -iE "summary|linked" || true
+    echo "--- MOVE mrm (--link --execute) ---"
+    python staging/move.py --source-flux-dir "${SB}/appdata/mrm" --target-collection-dir "${SB}/${ID}" \
+      --model IFS-NEMO --experiment hist --generation 2 --activity baseline --realization 1 \
+      --link --execute 2>&1 | grep -iE "summary|linked" || true
+    echo "--- UPDATE ---"
+    python staging/update.py 2>&1 | grep -iE "done\." || true
+  )
+  unset CATALOG_HOME_DIR
   count_items "${SB}/${ID}/metadata/items"
 }
 
 run_hydromet() {
   hr "HydroMet"
-  local SB="${SB_ROOT}/hydromet" ID="EO.DWD.STAT.HYDROMET_EXTREMES"
-  mkdir -p "${SB}"
-  cp "${REPO}/apps/hydromet/catalog_config.yaml" "${SB}/"
-  # parameters.json is optional now (datacube is inlined in the yaml); copy if present.
-  [ -f "${REPO}/apps/hydromet/parameters.json" ] && cp "${REPO}/apps/hydromet/parameters.json" "${SB}/" || true
-  python "${GEN}" hydromet "${SB}"
-  ( cd "${SB}"
-    echo "--- STAGE ---"
-    python "${REPO}/apps/hydromet/staging/stac_hda_hydromet.py" | tail -1 || true
-    echo "--- GENERATE ---"
-    python -c "from stac_dedl_core import ItemGenerator; ItemGenerator('${ID}').run()" >/dev/null 2>&1 || true
-  )
-  count_items "${SB}/${ID}/metadata/items"
+  run_app hydromet "EO.DWD.STAT.HYDROMET_EXTREMES" \
+    --source-dir "${SB_ROOT}/hydromet/appdata" --model IFS-NEMO --generation 2 --realization 1 --resolution 5km
 }
 
 run_fwi() {
   hr "FWI"
-  local SB="${SB_ROOT}/fwi" ID="EO.FMI.DAT.DESTINE_CLIMATE_WILDFIRE_FWI"
-  mkdir -p "${SB}"
-  python "${GEN}" fwi "${SB}"
-  python -c "import yaml; c=yaml.safe_load(open('${REPO}/apps/fwi/catalog_config.yaml')); c['daily_data_dir']='${SB}/appdata'; yaml.safe_dump(c, open('${SB}/catalog_config.yaml','w'), sort_keys=False)"
-  ( cd "${SB}"
-    echo "--- STAGE ---"
-    python "${REPO}/apps/fwi/staging/stac_hda_fwi.py" | tail -1 || true
-    echo "--- GENERATE ---"
-    python "${REPO}/apps/fwi/staging/generate_item_metadata.py" >/dev/null 2>&1 || true
-  )
-  count_items "${SB}/${ID}/metadata/items"
+  run_app fwi "EO.FMI.DAT.DESTINE_CLIMATE_WILDFIRE_FWI" \
+    --source-dir "${SB_ROOT}/fwi/appdata" --generation 2 --realization 1 --resolution 5km
 }
 
 run_energy() {
-  hr "Energy Indicators (provisional config — pending BSC confirmation)"
-  local SB="${SB_ROOT}/energy_indicators" ID="EO.BSC.DAT.ENERGY_INDICATORS"
-  mkdir -p "${SB}"
-  # Fake data is already in the staged collection layout (what BSC's organize
-  # step produces). The raw->staged organize step is shown in docs/RUN_GUIDE.md.
-  python "${GEN}" energy_indicators "${SB}"
-  ( export CATALOG_HOME_DIR="${SB}" APP_DATA_DIR="${SB}"
-    echo "--- STAGE (collection metadata via shared builder) ---"
-    python -c "
-from stac_dedl_core.appconfig import load_app_config
-from stac_dedl_core.collection_builder import write_collection_files
-write_collection_files(load_app_config('${REPO}/apps/energy_indicators'), overwrite=True)
-print('wrote collection.json + collection_config.json')" 2>&1 | tail -1 || true
-    echo "--- GENERATE ---"
-    cd "${SB}"
-    python -c "from stac_dedl_core import ItemGenerator; ItemGenerator('${ID}').run()" >/dev/null 2>&1 || true
-  )
-  count_items "${SB}/${ID}/metadata/items"
+  hr "Energy Indicators"
+  run_app energy_indicators "EO.BSC.DAT.ENERGY_INDICATORS" \
+    --source-dir "${SB_ROOT}/energy_indicators/appdata" \
+    --model ifs-nemo --experiment ssp3-7.0 --generation 2 --realization 1 --activity projections --resolution high
 }
 
 case "${APP}" in

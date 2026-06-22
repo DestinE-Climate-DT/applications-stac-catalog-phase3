@@ -12,6 +12,8 @@ from stac_dedl_core.appconfig import AppConfig
 from stac_dedl_core.config import STAC_VERSION
 
 SCIENTIFIC_EXTENSION = "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
+DATACUBE_EXTENSION = "https://stac-extensions.github.io/datacube/v2.2.0/schema.json"
+TIMESTAMPS_EXTENSION = "https://stac-extensions.github.io/timestamps/v1.1.0/schema.json"
 
 
 def build_collection_dict(cfg: AppConfig) -> dict:
@@ -63,11 +65,29 @@ def build_collection_dict(cfg: AppConfig) -> dict:
     }
 
     # Always present: DEDL collection validation requires the stac_extensions field.
-    collection["stac_extensions"] = [SCIENTIFIC_EXTENSION] if cfg.doi else []
+    if cfg.stac_extensions is not None:
+        collection["stac_extensions"] = cfg.stac_extensions
+    else:
+        extensions = []
+        if cfg.doi or cfg.publications:
+            extensions.append(SCIENTIFIC_EXTENSION)
+        if cfg.datacube:
+            extensions.append(DATACUBE_EXTENSION)
+            extensions.append(TIMESTAMPS_EXTENSION)
+        collection["stac_extensions"] = extensions
 
     collection["dedl:short_description"] = cfg.short_description
 
-    if cfg.doi:
+    if cfg.datacube:
+        collection["cube:dimensions"] = cfg.datacube.get("dimensions", {})
+        collection["cube:variables"] = cfg.datacube.get("variables", {})
+
+    if cfg.publications:
+        collection["sci:publications"] = [
+            {"sci:doi": p.get("doi"), "sci:citation": p.get("citation")}
+            for p in cfg.publications
+        ]
+    elif cfg.doi:
         collection["sci:publications"] = [
             {
                 "sci:doi": cfg.doi.get("code"),
