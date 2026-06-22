@@ -1,0 +1,303 @@
+# All Energy Indicators input lives here. Machine-specific paths can be
+# overridden with the APP_DATA_DIR / CATALOG_HOME_DIR environment variables.
+
+id: "EO.BSC.DAT.ENERGY_INDICATORS"
+
+title: "Energy Indicators from the Climate Adaptation Digital Twin"
+
+description: >
+  The Energy Indicators dataset from the Climate Adaptation Digital Twin is designed
+  to allow the provision of energy-relevant indicators to adapt to climate change. It
+  provides standard indicators for the wind energy sector (capacity factors for
+  different wind turbines, wind histograms, low wind and high wind events), as well
+  as indicators for energy demand (heating and cooling degree-days) and a first solar
+  indicator (photovoltaic potential). We provide them globally, at 5-10km resolution.
+  The indicators have been created from hourly data. Indicators from Destination
+  Earth production simulations.
+
+short_description: "Energy indicators from the Climate Adaptation Digital Twin, including production and demand indicators."
+
+license: CC-BY-4.0
+
+doi:
+  url: https://doi.org/10.5281/zenodo.15609171
+  code: 10.5281/zenodo.15609171
+  title: "DestinE-Climate-DT/energy_indicators: v1.1.0"
+  citation: "Lacima-Nadolnik, A., Roura-Adserias, F., Grayson, K. M., & Ghosh, S. (2025). DestinE-Climate-DT/energy_indicators: v1.1.0 (v1.1.0). Zenodo. https://doi.org/10.5281/zenodo.15609171"
+
+related:
+  url: https://destine.ecmwf.int/harnessing-the-climate-change-adaptation-digital-twin-for-wind-energy/
+  title: "Energy Indicators from the Climate Adaptation Digital Twin - Further Information"
+
+keywords:
+  - Digital Twins
+  - Climate Change
+  - Atmosphere
+  - Climate
+  - Energy
+  - Wind
+
+providers:
+  - name: "Barcelona Supercomputing Centre (BSC)"
+    roles: [producer, processor]
+    url: https://www.bsc.es
+  - name: "European Centre for Medium-Range Weather Forecasts (ECMWF)"
+    roles: [licensor]
+    url: https://www.ecmwf.int/
+  - name: "Destination Earth Data Lake (DEDL)"
+    roles: [host]
+    url: https://data.destination-earth.eu/
+
+thumbnail_url: https://s3.central.data.destination-earth.eu/swift/v1/dedl-public/collections/eo-bsc-dat-energy-indicators.png
+thumbnail_mime: image/png
+
+# Global coverage at ~5-10km (0.05deg) resolution.
+bbox: [-179.975, -89.975, 179.975, 89.975]
+
+# Items are organised data/YYYY/MM/<item>/, one item folder per month. Unlike
+# HydroLand, every NC file in a month (daily indicators + monthly aggregates) is
+# an asset of the SAME item — there is no data_type split.
+item_folder_level: MM
+item_config_optional: true
+split_data_type_items: false
+
+# Folder/item suffix order observed in the data:
+#   <id>_<start>_<end>__model__experiment__generation__realization__activity__resolution
+# This differs from the framework's default order (which puts activity before
+# realization), so it is pinned explicitly — ItemGenerator parses item ids in this
+# exact order; getting it wrong mislabels realization vs activity.
+property_order:
+  - model
+  - experiment
+  - generation
+  - realization
+  - activity
+  - resolution
+
+# HPC paths — override with env vars when running elsewhere
+app_data_dir: /gpfs/scratch/ehpc01/bsc032056/a314/output/energy_indicators/20150101/member01
+catalog_home_dir: /gpfs/scratch/ehpc01/bsc032056/a314/output/energy_indicators/20150101/member01
+
+# The sample only covers the projection run (2015-2049). Energy likely also
+# publishes the historical run — uncomment once confirmed with BSC.
+# Resolution is carried as an override because the shared simulation entry does
+# not define it (it is app-specific: 'high' here).
+simulations:
+  - ifs-nemo_generation-2_projection
+  # - ifs-nemo_generation-2_historical
+
+# model/experiment forced to lowercase to match the already-published item folder
+# naming convention (the shared simulations.yaml uses canonical IFS-NEMO/SSP3-7.0
+# uppercase, but Energy's existing catalog on S3 uses lowercase). resolution is an
+# override because the shared simulation entry doesn't define it (app-specific).
+overrides:
+  model: ifs-nemo
+  experiment: ssp3-7.0
+  resolution: high
+
+# STAC datacube extension (cube:dimensions / cube:variables), inlined so all
+# collection config lives in one file. Read by stac_dedl_core.collection_builder.
+datacube:
+  dimensions:
+    lat:
+      axis: y
+      type: spatial
+      extent: [-89.975, 89.975]
+      description: latitude
+    lon:
+      axis: x
+      type: spatial
+      extent: [-179.975, 179.975]
+      description: longitude
+    time:
+      type: temporal
+      step: "P0Y0M0DT1H0M0S"
+      extent: ["1990-01-01T00:00:00Z", "2049-12-31T23:00:00Z"]
+  variables:
+    Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_I:
+      type: data
+      unit: counts
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram counts for turbine type I"
+        shortName: cf_I_counts
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_I
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin counts representing the distribution of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type I over specified bins, showing the frequency of occurrence. Should be taken together with Monthly Capacity Factor Histogram bin edges."
+    Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_I:
+      type: data
+      unit: "MW/MW"
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram bin edges for turbine type I"
+        shortName: cf_I_bin_edges
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_I
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin edges representing the edges of the histogram bins of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type I. Should be taken together with Monthly Capacity Factor Histogram bin counts."
+    Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_II:
+      type: data
+      unit: counts
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram counts for turbine type II"
+        shortName: cf_II_counts
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_II
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin counts representing the distribution of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type II over specified bins, showing the frequency of occurrence. Should be taken together with Monthly Capacity Factor Histogram bin edges."
+    Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_II:
+      type: data
+      unit: "MW/MW"
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram bin edges for turbine type II"
+        shortName: cf_II_bin_edges
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_II
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin edges representing the edges of the histogram bins of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type II. Should be taken together with Monthly Capacity Factor Histogram bin counts."
+    Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_III:
+      type: data
+      unit: counts
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram counts for turbine type III"
+        shortName: cf_III_counts
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_III
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin counts representing the distribution of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type III over specified bins, showing the frequency of occurrence. Should be taken together with Monthly Capacity Factor Histogram bin edges."
+    Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_III:
+      type: data
+      unit: "MW/MW"
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram bin edges for turbine type III"
+        shortName: cf_III_bin_edges
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_III
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin edges representing the edges of the histogram bins of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type III. Should be taken together with Monthly Capacity Factor Histogram bin counts."
+    Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_S:
+      type: data
+      unit: counts
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram counts for turbine type S"
+        shortName: cf_S_counts
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_counts_for_turbine_type_S
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin counts representing the distribution of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type S over specified bins, showing the frequency of occurrence. Should be taken together with Monthly Capacity Factor Histogram bin edges."
+    Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_S:
+      type: data
+      unit: "MW/MW"
+      attrs:
+        long_name: "Monthly Capacity Factor Histogram bin edges for turbine type S"
+        shortName: cf_S_bin_edges
+        product_type: forecast
+        standard_name: Monthly_Capacity_Factor_Histogram_bin_edges_for_turbine_type_S
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin edges representing the edges of the histogram bins of hourly capacity factors (ratio of actual output over a period of time to the maximum possible output over an hour, expressed from 0 to 1) for turbine type S. Should be taken together with Monthly Capacity Factor Histogram bin counts."
+    Cooling_Degree-Days:
+      type: data
+      unit: K
+      attrs:
+        long_name: "Cooling Degree-Days"
+        shortName: cdd
+        product_type: forecast
+        standard_name: Cooling_Degree-Days
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Cooling Degree-Days represent the cumulative degrees by which the daily mean temperature exceeds a reference temperature, indicating demand for cooling."
+    Heating_Degree-Days:
+      type: data
+      unit: K
+      attrs:
+        long_name: "Heating Degree-Days"
+        shortName: hdd
+        product_type: forecast
+        standard_name: Heating_Degree-Days
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Heating Degree-Days represent the cumulative degrees by which the daily mean temperature falls below a reference temperature, indicating demand for heating."
+    Low_Wind_Events:
+      type: data
+      unit: "-"
+      attrs:
+        long_name: "Low Wind Events"
+        shortName: lwe
+        product_type: forecast
+        standard_name: Low_Wind_Events
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Low Wind Events indicate periods where wind speeds fall below a defined threshold, impacting wind energy production and local weather conditions."
+    High_Wind_Events:
+      type: data
+      unit: "-"
+      attrs:
+        long_name: "High Wind Events"
+        shortName: hwe
+        product_type: forecast
+        standard_name: High_Wind_Events
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "High Wind Events indicate periods where wind speeds exceed a defined threshold, which can influence weather hazards and energy generation."
+    Monthly_Wind_Speed_Histogram_counts:
+      type: data
+      unit: "-"
+      attrs:
+        long_name: "Monthly Wind Speed Histogram counts"
+        shortName: counts
+        product_type: forecast
+        standard_name: Monthly_Wind_Speed_Histogram_counts
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin conunts representing the distribution of wind speeds over specified bins, showing the frequency of occurrence. Should be taken together with Monthly Wind Speed Histogram bin edges."
+    Monthly_Wind_Speed_Histogram_bin_edges:
+      type: data
+      unit: "ms^-1"
+      attrs:
+        long_name: "Monthly Wind Speed Histogram bin edges"
+        shortName: bin_edges
+        product_type: forecast
+        standard_name: Monthly_Wind_Speed_Histogram_bin_edges
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Histogram bin edges representing the edges of the bins of a windspeed histogram over a week. Should be taken together with Weekly Wind Speed Histogram counts."
+    Daily_Photovoltaic_Potential:
+      type: data
+      unit: "kWh/m^2"
+      attrs:
+        long_name: "Photovoltaic Potential"
+        shortName: pvp
+        product_type: forecast
+        standard_name: Photovoltaic_Potential
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Photovoltaic Potential represents the estimated daily energy output per square meter of photovoltaic panels, based on solar radiation and other relevant factors."
+    Daily_Windspeed_Maxima:
+      type: data
+      unit: "ms-1"
+      attrs:
+        long_name: "Daily Wind Speed Maxima"
+        shortName: ws
+        product_type: forecast
+        standard_name: Daily_Windspeed_Maxima
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "Daily maximum wind speed, representing the highest daily wind speed recorded."
+    "99th Wind Speed Percentile":
+      type: data
+      unit: "ms-1"
+      attrs:
+        long_name: "99th Wind Speed Percentile"
+        shortName: ws_99
+        product_type: forecast
+        standard_name: 99th_Wind_Speed_Percentile
+        parameter_ID: "-"
+      dimensions: [lat, lon, time]
+      description: "The 99th percentile of monthly wind speeds at 100m height."

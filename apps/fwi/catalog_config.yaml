@@ -1,0 +1,95 @@
+# All FWI input lives here. Machine-specific paths can be overridden with the
+# APP_DATA_DIR / CATALOG_HOME_DIR environment variables.
+#
+# Confirmed by Suraj Polade (FMI): collection id, that staging produces monthly
+# items from daily files and yearly items from annual statistics, hard-link
+# staging, and that item ids carry model/experiment/generation/realization/
+# resolution/activity/data_type (note: resolution BEFORE activity — this app's
+# property order differs from HydroLand's and from Energy/HydroMet's).
+# NOT confirmed (no info provided): bbox, exact resolution value, exact
+# generation/realization values, license, full provider list, DOI. Marked
+# TODO below — confirm with FMI before publishing.
+
+id: "EO.FMI.DAT.DESTINE_CLIMATE_WILDFIRE_FWI"
+
+title: "Wildfire Fire Weather Index (FWI) from DestinE Climate DT"
+
+description: >
+  Fire Weather Index (FWI) outputs derived from the DestinE Climate DT
+  simulations. The dataset covers daily FWI fields, annual statistics, and
+  regional daily climatologies for the historical period (1990-2014) and the
+  projection period (2015-2049), produced from the Climate DT models.
+
+short_description: "Fire Weather Index (daily fields, annual statistics, regional climatology) from the DestinE Climate DT simulations."
+
+# TODO confirm with FMI — left as the legacy script's hardcoded value.
+license: CC-BY-4.0
+
+keywords:
+  - NetCDF
+  - Climate
+  - Wildfire
+  - FWI
+
+providers:
+  - name: "Finnish Meteorological Institute (FMI)"
+    roles: [producer, licensor]
+    url: https://en.ilmatieteenlaitos.fi
+  - name: "Destination Earth Data Lake (DEDL)"
+    roles: [host]
+    url: https://data.destination-earth.eu/
+
+# TODO confirm — no bbox was provided; placeholder assumes global coverage
+# (FWI is typically computed everywhere weather inputs are available).
+bbox: [-180, -90, 180, 90]
+
+# Daily files -> monthly items; annual statistics -> yearly items (placed under
+# the MM="01" subfolder, item id spans the full year). Both data_types coexist
+# under the same item_folder_level: MM layout.
+item_folder_level: MM
+item_config_optional: true
+split_data_type_items: true
+
+# Used by move.py to classify source filenames into a data_type.
+data_type_rules:
+  - {match: "_fwi.nc", data_type: monthly}
+  - {match: "_fwi_basic_and_days.nc", data_type: yearly}
+  - {match: "_fwi_quantiles.nc", data_type: yearly}
+  - {match: "_fwi_dailyclim_", data_type: yearly}
+
+# Folder/item suffix order confirmed from the legacy script: resolution comes
+# BEFORE activity here (HydroLand has activity before realization; Energy/
+# HydroMet have realization before activity but resolution last). Bare values,
+# no "generation-"/"realization-" prefix.
+property_order:
+  - model
+  - experiment
+  - generation
+  - realization
+  - resolution
+  - activity
+  - data_type
+
+# HPC paths — override with env vars when running elsewhere. The real FMI path
+# (per the old yaml) is /scratch/project_465000454/poladesu/ReRuns_FWI.
+app_data_dir: /work/lealroja/applications-stac-catalog-phase3-fwi-output-example
+catalog_home_dir: /work/lealroja/applications-stac-catalog-phase3-execution
+
+# Same three Climate DT models as HydroLand/HydroMet — FWI is computed
+# per-model the same way. Only used here for (model, start_year, end_year);
+# stage.py/move.py derive experiment/activity from the year locally (FWI uses
+# "historical"/"ssp3-7.0", not the shared simulations.yaml's "hist"/"SSP3-7.0"
+# spelling — confirmed from the legacy script's experiment_from_year()).
+simulations:
+  - ifs-nemo_generation-2_historical
+  # - ifs-nemo_generation-2_projection
+  # - ifs-fesom_generation-2_historical
+  # - ifs-fesom_generation-2_projection
+  # - icon_generation-2_historical
+  # - icon_generation-2_projection
+
+# TODO confirm realization/resolution with FMI — generation=2 matches the
+# other Climate DT apps; realization/resolution are guesses (1 / 5km).
+overrides:
+  realization: 1
+  resolution: 5km
