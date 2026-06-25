@@ -1,7 +1,7 @@
 # Energy Indicators
 
 **Collection ID:** `EO.BSC.DAT.ENERGY_INDICATORS`  
-**Owner:** Francesc Roura Adserias (BSC)  
+**Responsible:** Francesc Roura Adserias (BSC)  
 **Description:** Energy sector indicators derived from DestinE Climate DT simulations.
 Historical (1990–2014) and projection (2015–2049) at ~5 km resolution.
 
@@ -9,38 +9,34 @@ Historical (1990–2014) and projection (2015–2049) at ~5 km resolution.
 
 | File | Purpose |
 |---|---|
-| `catalog_config.yaml` | Collection metadata (id, title, bbox, simulations, …). **Provisional** — see note below. |
-| `staging/check_data.sh` | Validates that all expected output files are present (rudimentary DQC) |
-| `staging/organize_output_energy_indicators.py` | Reorganises raw output into STAC-compatible `YYYY/MM/item/` folder structure |
-| `staging/transfer_to_dedl_energy_indicators.sh` | Uploads collection data to DEDL S3 via s3cmd |
+| `catalog_config.yaml` | Collection metadata (id, title, bbox, simulations, datacube). See note below. |
+| `staging/stage.py` | Writes `collection.json` + `collection_config.json`, creates STAC folder skeleton |
+| `staging/move.py` | Links/copies/moves source NetCDF files from `YYYY/MM/` into `data/YYYY/MM/<item>/` |
+| `staging/update.py` | Generates one `metadata/items/<item>.json` per data folder |
+| `staging/delete_s3_collection_prefix.py` | Maintenance utility: deletes the collection prefix from S3 |
 
-> ⚠️ **`catalog_config.yaml` is provisional (2026-06-15).** Its values were inferred
-> from a sample of the staged data, not supplied by BSC. Fields marked
-> `# TODO confirm` (license, title, description, providers, the simulation list, HPC
-> paths) need confirmation before publishing. The collection metadata is generated
-> from this file by the shared `stac_dedl_core.collection_builder`.
+> ⚠️ **`catalog_config.yaml` is provisional.** Its values were inferred from a sample of
+> the staged data. Fields marked `# TODO confirm` (license, title, description, providers,
+> the simulation list) need confirmation from BSC before publishing.
 
 ## What the scripts do
 
-**`organize_output_energy_indicators.py`** — walks `BASE_DIR` (hardcoded BSC scratch
-path) looking for `YYYY/MM/` subfolders. For each year/month it computes the first and
-last day of the month, builds an item folder name of the form
-`EO.BSC.DAT.ENERGY_INDICATORS_<start>T000000_<end>T230000__<model>__<experiment>__<generation>__<realization>__<activity>__<resolution>`
-(metadata values are hardcoded constants at the top of the script: `model="ifs-nemo"`,
-`experiment="ssp3-7.0"`, etc.), creates that folder inside the month folder, and **moves**
-all existing files into it with `os.rename`. A `DRY_RUN = True` toggle at the top must be
-flipped to `False` to actually execute; existing item folders are skipped.
+**`stage.py`** — loads `catalog_config.yaml` via `stac_dedl_core.load_app_config`
+(simulation keys resolved against `apps/_shared/simulations.yaml`), writes
+`metadata/collection.json` and `metadata/collection_config.json`, and creates one item
+folder skeleton per simulation month under `data/YYYY/MM/`. Dry run by default; `--execute` applies.
 
-**`check_data.sh`** — pre-staging quality check. For each year 1990–2015 it counts files
-per statistic: daily stats (`lwe`, `hwe`, `pvp`, `cdd`, `hdd`) must have 365/366 files,
-monthly stats (percentiles, capacity-factor counts, wind-speed histograms) must have 12.
-Prints a `DATA MISSING!` line for anything that doesn't match.
+**`move.py`** — links or moves source NetCDF files from the raw `YYYY/MM/` layout into
+the staged `data/YYYY/MM/<item>/` layout. Accepts `--source-dir` and
+`--target-collection-dir`, plus simulation metadata flags. Modes: `--link` (symlink),
+`--copy`, or `--move`. Dry run by default; `--execute` applies.
 
-**`transfer_to_dedl_energy_indicators.sh`** — upload script. Takes a single `<year>`
-argument, loads the `s3cmd` module on the BSC HPC, syncs the `metadata/` folder once,
-then loops over months 01–12 running `s3cmd sync` for `data/<year>/<month>/` to
-`s3://usergenerated-proposal-eo.bsc.dat.energy-indicators/...`. Paths are hardcoded;
-credentials come from `~/.config-s3cmd`.
+**`update.py`** — runs `stac_dedl_core.ItemGenerator` to write a STAC item JSON for every
+folder under `data/` that contains assets. Empty-asset folders are removed afterwards.
+
+**`delete_s3_collection_prefix.py`** — maintenance utility: lists all S3 objects under
+`<collection_id>/` in the collection bucket and deletes them in batches of 1000.
+Dry run by default; `--execute` to delete.
 
 ## Pipeline
 
@@ -49,43 +45,18 @@ credentials come from `~/.config-s3cmd`.
 cp .env.example .env
 # Edit .env with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
 
-# 2. Edit staging/organize_output_energy_indicators.py to set BASE_DIR
-#    to your raw output directory
+# 2. Set machine-specific paths (from repo root)
+source ../../local_paths.sh energy_indicators   # sets APP_DATA_DIR and CATALOG_HOME_DIR
 
 # 3. Run
-bash run_pipeline.sh
-
-# Or step by step:
-bash staging/check_data.sh               # optional DQC
-python staging/organize_output_energy_indicators.py
-# then generate_item_metadata + upload
+bash run_pipeline.sh                    # dry run — shows the staging plan
+bash run_pipeline.sh --execute          # stage + generate items
+bash run_pipeline.sh --execute --upload # + upload to DEDL S3
 ```
-
-## Generating STAC metadata + items (verified)
-
-`organize_output_energy_indicators.py` builds the `data/YYYY/MM/<item>/` tree but does
-**not** write `collection.json` / `collection_config.json`. Those come from
-`catalog_config.yaml` via the shared builder. This was verified end-to-end on the real
-2016 sample (12 items):
-
-```bash
-# from a dir whose CATALOG_HOME_DIR holds EO.BSC.DAT.ENERGY_INDICATORS/data/...
-python -c "from stac_dedl_core.appconfig import load_app_config; from stac_dedl_core.collection_builder import write_collection_files; write_collection_files(load_app_config('apps/energy_indicators'), overwrite=True)"
-python -c "from stac_dedl_core import ItemGenerator; ItemGenerator('EO.BSC.DAT.ENERGY_INDICATORS').run()"
-```
-
-Or just dry-run it with fake data: `bash tools/dry_run.sh energy_indicators`
-(see `docs/RUN_GUIDE.md`).
 
 ## Notes
 
 - `item_folder_level` is `MM` — items are grouped by month
-- The folder/item suffix order is `model__experiment__generation__realization__activity__resolution`;
-  `catalog_config.yaml` pins `property_order` to match so item properties aren't mislabeled.
-- Folder names use lowercase `ssp3-7.0` while the NetCDF attribute / canonical spelling
-  is `SSP3-7.0` — reconcile with BSC.
-- `transfer_to_dedl_energy_indicators.sh` uses `s3cmd` directly; requires `s3cmd` in PATH and `~/.config-s3cmd`
-- Step 0 (check_data.sh) is optional but recommended before staging
-- Indicators in the data include daily stats (`cdd`, `hdd`, `lwe`, `hwe`, `pvp`) plus
-  monthly stats (percentiles, capacity-factor counts, wind-speed histograms) — per
-  `check_data.sh`.
+- The folder/item suffix order is `model__experiment__generation__realization__activity__resolution`; `catalog_config.yaml` pins `property_order` to match so item properties are not mislabeled
+- Source data layout expected: `<APP_DATA_DIR>/YYYY/MM/*.nc`
+- Folder names use lowercase `ssp3-7.0` to match BSC's published naming convention
