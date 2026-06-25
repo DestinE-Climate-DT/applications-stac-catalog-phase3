@@ -74,9 +74,11 @@ property_order:
   - activity
   - resolution
 
-# HPC paths — override with env vars when running elsewhere
-app_data_dir: /gpfs/scratch/ehpc01/bsc032056/a314/output/energy_indicators/20150101/member01
-catalog_home_dir: /gpfs/scratch/ehpc01/bsc032056/a314/output/energy_indicators/20150101/member01
+# Machine-specific paths — override via APP_DATA_DIR / CATALOG_HOME_DIR env vars.
+# See local_paths.sh at the repo root for the real paths on each machine.
+# Source data layout expected: <app_data_dir>/YYYY/MM/*.nc
+app_data_dir: /path/to/data/energy_indicators
+catalog_home_dir: /path/to/stac-catalog-output
 
 # The sample only covers the projection run (2015-2049). Energy likely also
 # publishes the historical run — uncomment once confirmed with BSC.

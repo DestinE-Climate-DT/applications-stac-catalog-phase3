@@ -62,9 +62,10 @@ data_type_rules:
   - {match: "_mHM_Fluxes_States", data_type: mhm}
   - {match: "_mRM_Fluxes_States", data_type: mrm}
 
-# HPC paths — override with env vars when running elsewhere
-app_data_dir: /data/hsd/projects/destine_operational_results/ifs-nemo/phase_2/historical/mhm
-catalog_home_dir: /work/lealroja/applications-stac-catalog-phase3-execution
+# Machine-specific paths — override via APP_DATA_DIR / CATALOG_HOME_DIR env vars.
+# See local_paths.sh at the repo root for the real paths on each machine.
+app_data_dir: /path/to/data/mhm
+catalog_home_dir: /path/to/stac-catalog-output
 
 # Control (cont) runs and storylines exist in _shared/simulations.yaml but are deliberately not published by HydroLand.
 simulations:

@@ -112,6 +112,37 @@ item end up split across several (or vice versa).
   *are* confirmed, taken from the legacy `stac_hda_fwi.py` script that used to live
   in this repo.
 
+## Machine-specific paths
+
+Every `catalog_config.yaml` uses placeholder values for `app_data_dir` and
+`catalog_home_dir` (e.g. `/path/to/data/mhm`, `/path/to/stac-catalog-output`).
+The framework reads those two keys but always checks the environment variables
+`APP_DATA_DIR` and `CATALOG_HOME_DIR` first, so you never need to edit the YAML
+to point at your own data.
+
+**`local_paths.sh`** at the repo root holds the real paths for the UFZ HPC and
+the example data directories. Source it before running any pipeline:
+
+```bash
+# from the repo root
+source local_paths.sh hydroland          # exports APP_DATA_DIR + CATALOG_HOME_DIR
+cd apps/hydroland && bash run_pipeline.sh --execute
+```
+
+If you are on a different machine, copy the file and update the four
+`*_DATA_DIR` variables at the top to match your local layout. You can also
+export the variables directly in your shell without using the file:
+
+```bash
+export APP_DATA_DIR=/your/path/to/mhm/data
+export CATALOG_HOME_DIR=/your/path/to/output
+cd apps/hydroland && bash run_pipeline.sh --execute
+```
+
+The notebooks do the same thing in Python (`os.environ["CATALOG_HOME_DIR"] = ...`
+at the top of each notebook) — every hardcoded path inside a notebook is marked
+with a `# <-- HARDCODED PATH` comment so you know exactly what to change.
+
 ## Where to go next
 
 For the full step-by-step walkthrough of one app — editing `catalog_config.yaml`,
