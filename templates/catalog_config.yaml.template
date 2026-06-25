@@ -1,0 +1,12 @@
+# Collection metadata template — rename to catalog_config.yaml
+# Used by your staging script to create collection.json
+
+id: "EO.ORG.DAT.YOUR_APP"             # UPPERCASE, dots + underscores only, no dashes
+title: "Your App Title"
+description: >
+  Detailed description of the dataset. Include model, period, resolution, and variables.
+short_description: "One-line summary for DEDL catalogue."
+generation: 2
+realization: 1
+resolution: "5km"
+license: "CC-BY-4.0"

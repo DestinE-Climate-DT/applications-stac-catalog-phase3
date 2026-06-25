@@ -1,0 +1,12 @@
+# Core STAC framework (installed via pip install -e . at repo root)
+# Run: pip install -e .
+
+# Additional per-app dependencies
+xarray
+pandas
+PyYAML
+
+# Pinned versions from upstream reference (boto3 known-good version)
+# An issue has been identified with the latest version of boto3
+boto3==1.35.99
+botocore==1.35.99
