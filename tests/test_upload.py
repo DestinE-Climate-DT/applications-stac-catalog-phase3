@@ -44,29 +44,33 @@ def collection_root(tmp_path: Path) -> Path:
 
 
 def test_default_bucket_name():
+    # underscores in collection IDs must become hyphens (S3 bucket names forbid underscores)
     assert get_default_bucket_name("EO.BSC.DAT.ENERGY_INDICATORS") == (
-        "usergenerated-proposal-eo.bsc.dat.energy_indicators"
+        "usergenerated-proposal-eo.bsc.dat.energy-indicators"
+    )
+    assert get_default_bucket_name("EO.DWD.STAT.HYDROMET_EXTREMES") == (
+        "usergenerated-proposal-eo.dwd.stat.hydromet-extremes"
     )
 
 
 def test_iter_upload_pairs_metadata_first_then_years(collection_root):
     keys = [key for _, key in iter_upload_pairs(collection_root, "EO.TEST.DAT.DEMO")]
-    assert keys[0].startswith("EO.TEST.DAT.DEMO/metadata/")
+    assert keys[0].startswith("metadata/")
     assert keys == [
-        "EO.TEST.DAT.DEMO/metadata/collection.json",
-        "EO.TEST.DAT.DEMO/metadata/items/item1.json",
-        "EO.TEST.DAT.DEMO/data/1990/01/ITEM_X/file_1990_01.nc",
-        "EO.TEST.DAT.DEMO/data/1990/02/ITEM_X/file_1990_02.nc",
-        "EO.TEST.DAT.DEMO/data/2015/01/ITEM_X/file_2015_01.nc",
+        "metadata/collection.json",
+        "metadata/items/item1.json",
+        "data/1990/01/ITEM_X/file_1990_01.nc",
+        "data/1990/02/ITEM_X/file_1990_02.nc",
+        "data/2015/01/ITEM_X/file_2015_01.nc",
     ]
 
 
 def test_iter_upload_pairs_year_filter_keeps_metadata(collection_root):
     keys = [k for _, k in iter_upload_pairs(collection_root, "EO.TEST.DAT.DEMO", year="2015")]
     assert keys == [
-        "EO.TEST.DAT.DEMO/metadata/collection.json",
-        "EO.TEST.DAT.DEMO/metadata/items/item1.json",
-        "EO.TEST.DAT.DEMO/data/2015/01/ITEM_X/file_2015_01.nc",
+        "metadata/collection.json",
+        "metadata/items/item1.json",
+        "data/2015/01/ITEM_X/file_2015_01.nc",
     ]
 
 
@@ -90,7 +94,7 @@ def test_execute_uploads_all(collection_root):
 
 
 def test_execute_skips_existing_unless_overwrite(collection_root):
-    existing = {"EO.TEST.DAT.DEMO/metadata/collection.json"}
+    existing = {"metadata/collection.json"}
     client = FakeS3Client(existing=existing)
     stats = upload_collection(
         "EO.TEST.DAT.DEMO", collection_root, execute=True, s3_client=client

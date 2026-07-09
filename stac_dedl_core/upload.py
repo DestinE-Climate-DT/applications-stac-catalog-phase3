@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 def get_default_bucket_name(collection_id: str) -> str:
-    return f"{S3_USER_GENERATED_BUCKET_PREFIX}-{collection_id.lower()}"
+    # S3 bucket names cannot contain underscores — replace with hyphens.
+    return f"{S3_USER_GENERATED_BUCKET_PREFIX}-{collection_id.lower().replace('_', '-')}"
 
 
 def iter_upload_pairs(
@@ -37,12 +38,12 @@ def iter_upload_pairs(
 ) -> Iterator[Tuple[Path, str]]:
     """Yield (file_path, object_key): metadata/ first, then data/ by year/month.
 
-    Object keys are prefixed with collection_id so they land in the right
-    top-level prefix inside the bucket.
+    Keys are relative to collection_root (no collection_id prefix) — files land
+    at metadata/... and data/... directly at the bucket root.
     """
 
     def key_for(p: Path) -> str:
-        return f"{collection_id}/{p.relative_to(collection_root).as_posix()}"
+        return p.relative_to(collection_root).as_posix()
 
     # metadata/ always goes first
     metadata_dir = collection_root / "metadata"
