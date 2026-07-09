@@ -48,6 +48,15 @@ pip install -e .
 pip install xarray pandas PyYAML
 ```
 
+> **Note:** `pip install` does **not** install `libmagic`, which is a system library
+> required by the `python-magic` dependency. If you see
+> `ImportError: failed to find libmagic`, install it via your OS package manager:
+> - Debian/Ubuntu: `sudo apt-get install libmagic1`
+> - RHEL/Rocky: `sudo dnf install file-libs`
+> - macOS: `brew install libmagic`
+>
+> The conda option (Option A) handles this automatically.
+
 ### 3. Configure credentials
 
 Each application folder contains a `.env.example` file. Copy it and fill in your S3 credentials:
