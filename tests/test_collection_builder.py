@@ -140,3 +140,36 @@ def test_no_related_no_describedby_link(cfg):
     cpath, _ = write_collection_files(cfg, overwrite=True)
     coll = json.loads(cpath.read_text())
     assert {l["rel"] for l in coll["links"]} == {"license", "cite-as"}
+
+
+def test_published_data_type_key_absent_by_default(cfg):
+    """Without the option the published key stays 'data_type'."""
+    _, ccpath = write_collection_files(cfg)
+    keys = json.loads(ccpath.read_text())["additional_property_keys"]
+    assert keys[-1] == "data_type"
+    assert keys == cfg.property_order
+
+
+def test_published_data_type_key_renames_only_published_key(tmp_path):
+    """HydroLand case: rename the published key, leave property_order alone.
+
+    Item folder names are built from property_order VALUES, so renaming the
+    published key must not change property_order (or folder names would break).
+    """
+    app_dir = tmp_path / "apps" / "demo"
+    shared = tmp_path / "apps" / "_shared"
+    app_dir.mkdir(parents=True)
+    shared.mkdir(parents=True)
+    payload = dict(APP_YAML, published_data_type_key="collection_data_type")
+    (app_dir / "catalog_config.yaml").write_text(yaml.safe_dump(payload))
+    (shared / "simulations.yaml").write_text(yaml.safe_dump(SIMS))
+    cfg = load_app_config(app_dir)
+
+    # internal order is untouched -> folder names unaffected
+    assert cfg.property_order[-1] == "data_type"
+
+    _, ccpath = write_collection_files(cfg)
+    keys = json.loads(ccpath.read_text())["additional_property_keys"]
+    assert keys[-1] == "collection_data_type"
+    # same length, so the positional zip against folder suffixes still lines up
+    assert len(keys) == len(cfg.property_order)

@@ -83,6 +83,13 @@ class AppConfig:
     related: dict | None = None
     item_config_optional: bool = True
     split_data_type_items: bool = False
+
+    # Name used for the data-type property in the PUBLISHED metadata only
+    # (collection_config.json -> additional_property_keys, and hence each item's
+    # properties). Item folder names are built from property VALUES, so renaming
+    # this does not touch folder names, item IDs or asset hrefs. HydroLand sets it
+    # to "collection_data_type" to stay consistent with items already on S3.
+    published_data_type_key: str | None = None
     # Optional STAC datacube extension (cube:dimensions / cube:variables), inlined
     # as a mapping with "dimensions" and "variables" keys. When set,
     # collection_builder adds the datacube + timestamps stac_extensions and the
@@ -219,6 +226,7 @@ def load_app_config(
         )
 
     split = bool(cfg.get("split_data_type_items", False))
+    published_data_type_key = cfg.get("published_data_type_key") or None
     property_order = _derive_property_order(
         simulations, cfg.get("property_order"), split
     )
@@ -274,6 +282,7 @@ def load_app_config(
         related=cfg.get("related"),
         item_config_optional=bool(cfg.get("item_config_optional", True)),
         split_data_type_items=split,
+        published_data_type_key=published_data_type_key,
         data_type_rules=data_type_rules,
         indicators=cfg.get("indicators"),
         datacube=cfg.get("datacube"),

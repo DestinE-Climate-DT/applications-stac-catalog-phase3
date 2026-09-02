@@ -84,6 +84,33 @@ item end up split across several (or vice versa).
   HydroMet and Energy Indicators, where every file for a given period/month
   belongs to one item regardless of what kind of product it is.
 
+### `published_data_type_key` — renaming the data-type property for publication
+
+`split_data_type_items: true` appends `data_type` to `property_order`. That name ends
+up in two places: the item **folder name suffix** (as a value, e.g. `__aridity_index`)
+and the **property key** in each item's JSON.
+
+Item properties are built positionally, by zipping `additional_property_keys` from
+`collection_config.json` against the folder-name suffix tokens. The key names therefore
+live only in `collection_config.json` — folder names never contain them.
+
+`published_data_type_key` renames just that published key, leaving `property_order`
+(and so folder names, item IDs and asset hrefs) untouched:
+
+```yaml
+split_data_type_items: true
+published_data_type_key: collection_data_type
+```
+
+HydroLand sets this because the items already published on the DEDL use
+`collection_data_type`. Without it, newly generated items would say `data_type` and the
+collection would carry two names for one field, breaking portal filtering.
+
+⚠️ Do **not** try to achieve this by editing `property_order` directly. `stage.py`
+filters with `[k for k in cfg.property_order if k != "data_type"]` and
+`ordered_properties()` drops keys not in the list, so the token would be silently
+stripped out of the item folder names.
+
 ## What differs between apps
 
 | | HydroLand | HydroMet | Energy Indicators | FWI |

@@ -11,6 +11,7 @@ from typing import Callable, List, Dict, Any, Optional
 
 from stac_dedl_core.config import (
     APP_LOGGER_NAME,
+    COLLECTION_BUCKET_OVERRIDES,
     IS_OVERWRITE_S3,
     IS_UPLOAD_S3,
     ITEM_CONFIG_FILE_NAME,
@@ -35,10 +36,8 @@ from stac_dedl_core.usergenerated.env_utils import validate_aws_credentials
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_BUCKET_OVERRIDES = {
-    "EO.UFZ.DAT.HYDROLAND": "usergenerated-proposal-eo.ufz.dat.ifs-nemo-hydroland",
-    "EO.UFZ.DAT.IFS_NEMO_HYDROLAND": "usergenerated-proposal-eo.ufz.dat.ifs-nemo-hydroland",
-}
+# Bucket overrides live in config.py so upload.py and this module cannot drift.
+DEFAULT_BUCKET_OVERRIDES = COLLECTION_BUCKET_OVERRIDES
 
 
 def get_default_bucket_name(collection_id: str) -> str:

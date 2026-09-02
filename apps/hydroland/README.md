@@ -55,6 +55,16 @@ The trailing token (e.g. `aridity_index`, `95th_percentile_discharge_indicators`
 the item's `data_type`. Tokens containing any `scenario_markers` substring map to the
 scenario simulation; everything else maps to the reference simulation.
 
+### Published property key
+
+Items already on the DEDL use `collection_data_type` as the data-type property key, so
+`catalog_config.yaml` sets `published_data_type_key: collection_data_type`. This renames
+the key **only** in `collection_config.json` (and hence in each item's `properties`);
+item folder names, item IDs and asset hrefs are unaffected. See `apps/RUN_GUIDE.md`.
+
+`temporal_end` is likewise pinned to `2049-12-31T23:59:59Z` to match the extent already
+published, rather than the value the code would derive.
+
 ## Pipeline
 
 ```bash

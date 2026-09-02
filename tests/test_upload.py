@@ -146,3 +146,38 @@ def test_failed_upload_counted_and_continues(collection_root):
     )
     assert stats["failed"] == 1
     assert stats["uploaded"] == 4
+
+
+def test_hydroland_bucket_override_matches_live_bucket():
+    """HydroLand's bucket kept its original name; the collection ID changed later."""
+    assert get_default_bucket_name("EO.UFZ.DAT.HYDROLAND") == (
+        "usergenerated-proposal-eo.ufz.dat.ifs-nemo-hydroland"
+    )
+
+
+def test_upload_and_itemgen_agree_on_bucket():
+    """The two modules must not drift apart again (they share one override map)."""
+    from stac_dedl_core.generate_item_metadata import (
+        get_default_bucket_name as itemgen_bucket,
+    )
+    for cid in ("EO.UFZ.DAT.HYDROLAND", "EO.UFZ.DAT.IFS_NEMO_HYDROLAND"):
+        assert get_default_bucket_name(cid) == itemgen_bucket(cid)
+
+
+def test_hydroland_keys_are_prefixed_with_collection_id(collection_root):
+    """HydroLand stores objects under <collection_id>/ inside its bucket."""
+    keys = [k for _, k in iter_upload_pairs(collection_root, "EO.UFZ.DAT.HYDROLAND")]
+    assert all(k.startswith("EO.UFZ.DAT.HYDROLAND/") for k in keys)
+    assert keys[0] == "EO.UFZ.DAT.HYDROLAND/metadata/collection.json"
+
+
+def test_hydromet_keys_stay_unprefixed(collection_root):
+    """HydroMet's manual layout has no prefix — this must not regress."""
+    keys = [k for _, k in iter_upload_pairs(collection_root, "EO.DWD.STAT.HYDROMET_EXTREMES")]
+    assert keys[0] == "metadata/collection.json"
+    assert not any(k.startswith("EO.DWD") for k in keys)
+
+
+def test_explicit_key_prefix_overrides_default(collection_root):
+    keys = [k for _, k in iter_upload_pairs(collection_root, "EO.UFZ.DAT.HYDROLAND", key_prefix="")]
+    assert keys[0] == "metadata/collection.json"

@@ -41,6 +41,21 @@ S3_ENDPOINT_URL: str = "https://s3.central.data.destination-earth.eu"
 # Standardised bucket names for usergenerated collections e.g. usergenerated-EO.XXX.YYY.ZZZ. In the code we concatenate with the -EO.XXX.YYY.ZZZ
 S3_USER_GENERATED_BUCKET_PREFIX: str = "usergenerated-proposal"
 
+# Collections whose bucket name does not follow the "<prefix>-<collection-id>" rule.
+# HydroLand's bucket was created under the collection's original ID and buckets cannot
+# be renamed, so the bucket keeps the old name while the collection ID is the new one.
+COLLECTION_BUCKET_OVERRIDES: dict[str, str] = {
+    "EO.UFZ.DAT.HYDROLAND": "usergenerated-proposal-eo.ufz.dat.ifs-nemo-hydroland",
+    "EO.UFZ.DAT.IFS_NEMO_HYDROLAND": "usergenerated-proposal-eo.ufz.dat.ifs-nemo-hydroland",
+}
+
+# Collections whose objects live under a top-level key prefix inside the bucket rather
+# than at the bucket root. Default (absent) means no prefix: metadata/... and data/...
+COLLECTION_KEY_PREFIX_OVERRIDES: dict[str, str] = {
+    "EO.UFZ.DAT.HYDROLAND": "EO.UFZ.DAT.HYDROLAND",
+    "EO.UFZ.DAT.IFS_NEMO_HYDROLAND": "EO.UFZ.DAT.IFS_NEMO_HYDROLAND",
+}
+
 
 class ItemFolderNamingConventionType(StrEnum):
     STANDARD = "standard"

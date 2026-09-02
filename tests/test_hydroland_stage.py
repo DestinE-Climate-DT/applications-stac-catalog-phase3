@@ -169,9 +169,14 @@ def test_real_app_config_loads():
     shared simulations.yaml."""
     cfg = load_app_config(REPO_ROOT / "apps" / "hydroland")
     assert cfg.id == "EO.UFZ.DAT.HYDROLAND"
-    assert len(cfg.simulations) == 6
+    # IFS-NEMO historical + projection are published; FESOM/ICON stay commented out
+    # in catalog_config.yaml until their data exists.
+    assert len(cfg.simulations) == 2
     assert cfg.property_order == [
         "model", "experiment", "generation", "activity", "realization", "data_type",
     ]
     assert cfg.temporal_start == "1990-01-01T00:00:00Z"
-    assert cfg.temporal_end == "2049-12-31T23:00:00Z"
+    # pinned in catalog_config.yaml to match the extent already published on DEDL
+    assert cfg.temporal_end == "2049-12-31T23:59:59Z"
+    # folder names keep "data_type"; only the PUBLISHED key is renamed
+    assert cfg.published_data_type_key == "collection_data_type"

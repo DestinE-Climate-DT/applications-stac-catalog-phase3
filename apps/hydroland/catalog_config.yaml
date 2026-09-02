@@ -3,8 +3,14 @@
 
 id: EO.UFZ.DAT.HYDROLAND
 title: "Hydroland - Land Surface Hydrology Simulations. Second generation IFS-NEMO, IFS-FESOM and ICON Historical 1990-2014 run and projection 2015-2049 run."
-description: "This catalog contains results from Hydroland produced with the Mesoscale Hydrologic Model (mHM). mHM outputs were further processed to provide user-oriented indicators, including Soil Moisture, Aridity Index, and Discharge Indicators. The dataset also includes the original mHM outputs and additional figures documenting model validation and selected results."
-short_description: "Hydroland dataset derived from mHM model, providing several fluxes like river discharge or soil moisture as well as indicators: Soil Moisture, Aridity Index, and Discharge."
+description: |-
+  Land surface hydrology governs the availability of water for ecosystems, agriculture and human use, and its response to climate change is a key concern for adaptation planning. The HydroLand application provides land surface hydrology indicators, including soil moisture, discharge and aridity, derived from DestinE Climate Digital Twin (Climate DT) model data. The application enables users to assess the spatial distribution, seasonal variability and long-term changes of hydrological conditions. More information can be found in the Climate DT User Guide.
+
+  HydroLand is based on the Mesoscale Hydrologic Model (mHM, mhm-ufz.org), a distributed hydrological model that simulates the terrestrial water cycle from meteorological forcing. mHM is driven by Climate DT output to produce fluxes such as river discharge, evapotranspiration and soil moisture, which are then processed into user-oriented indicators covering soil moisture, discharge, and aridity. The dataset also includes the original mHM outputs and figures documenting model validation and selected results.
+
+  By applying mHM consistently to Climate DT simulations, the application provides a harmonised assessment of current and future hydrological conditions globally, supporting the analysis of drought, water availability and climate-driven trends in the terrestrial water cycle.
+short_description: |-
+  The Hydroland application uses outputs from the mesoscale Hydrologic Model (mHM, mhm-ufz.org), including hydrological variables such as river discharge and soil moisture. It also provides derived indicators: Soil Moisture Indicators, Aridity Index, and Discharge Indicators.
 
 license: LGPL-3.0-or-later
 license_url: https://www.gnu.org/licenses/lgpl-3.0.en.html
@@ -53,9 +59,15 @@ thumbnail_mime: image/png
 
 bbox: [-180, -56, 180, 84]
 
+# Keep the temporal extent exactly as already published on the DEDL (the derived
+# default would narrow the end by one hour to 23:00:00Z).
+temporal_end: "2049-12-31T23:59:59Z"
+
 item_folder_level: MM
 item_config_optional: true
 split_data_type_items: true
+# Items already published on S3 use 'collection_data_type'; keep new items consistent.
+published_data_type_key: collection_data_type
 
 # Rules to classify NC files into item data_type suffixes (see docs/RUN_GUIDE.md)
 data_type_rules:
@@ -70,7 +82,7 @@ catalog_home_dir: /path/to/stac-catalog-output
 # Control (cont) runs and storylines exist in _shared/simulations.yaml but are deliberately not published by HydroLand.
 simulations:
   - ifs-nemo_generation-2_historical
-  # - ifs-nemo_generation-2_projection
+  - ifs-nemo_generation-2_projection
   # - ifs-fesom_generation-2_historical
   # - ifs-fesom_generation-2_projection
   # - icon_generation-2_historical
@@ -78,7 +90,7 @@ simulations:
 
 # Multi-year indicator products (aridity index, soil moisture, etc.) — see docs/RUN_GUIDE.md
 indicators:
-  source_dir: /work/lealroja/ifs-nemo/5km/historic_ba/hourly/indicators
+  source_dir: /data/hsd/projects/destine_operational_results/ifs-nemo/phase_2/historical/indicators
   reference_simulation: ifs-nemo_generation-2_historical
   scenario_simulation: ifs-nemo_generation-2_projection
   scenario_markers: [scen, percent_change]

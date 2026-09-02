@@ -125,9 +125,22 @@ def build_collection_config_dict(cfg: AppConfig) -> dict:
         "item_folder_level": cfg.item_folder_level,
         "thumbnail_regex": "^thumbnail",
         "overview_regex": "^overview",
-        "additional_property_keys": cfg.property_order,
+        "additional_property_keys": _published_property_keys(cfg),
         "bbox": cfg.bbox,
     }
+
+
+def _published_property_keys(cfg) -> list[str]:
+    """property_order with the data-type key renamed for publication, if configured.
+
+    Item properties are built by zipping these keys against the item folder name
+    suffix, so the list length must stay the same — only the name changes.
+    """
+    keys = list(cfg.property_order)
+    published = getattr(cfg, "published_data_type_key", None)
+    if published and "data_type" in keys:
+        keys[keys.index("data_type")] = published
+    return keys
 
 
 def _write_json(path: Path, payload: dict, overwrite: bool, indent: int) -> None:

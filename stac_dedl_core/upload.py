@@ -21,29 +21,50 @@ from botocore.client import Config
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 
-from stac_dedl_core.config import S3_ENDPOINT_URL, S3_USER_GENERATED_BUCKET_PREFIX
+from stac_dedl_core.config import (
+    COLLECTION_BUCKET_OVERRIDES,
+    COLLECTION_KEY_PREFIX_OVERRIDES,
+    S3_ENDPOINT_URL,
+    S3_USER_GENERATED_BUCKET_PREFIX,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def get_default_bucket_name(collection_id: str) -> str:
-    # S3 bucket names cannot contain underscores — replace with hyphens.
+    """Bucket for a collection: an explicit override, else the naming convention.
+
+    S3 bucket names cannot contain underscores, so they become hyphens.
+    """
+    if collection_id in COLLECTION_BUCKET_OVERRIDES:
+        return COLLECTION_BUCKET_OVERRIDES[collection_id]
     return f"{S3_USER_GENERATED_BUCKET_PREFIX}-{collection_id.lower().replace('_', '-')}"
+
+
+def get_default_key_prefix(collection_id: str) -> str:
+    """Top-level key prefix inside the bucket. Empty means objects sit at the root."""
+    return COLLECTION_KEY_PREFIX_OVERRIDES.get(collection_id, "")
 
 
 def iter_upload_pairs(
     collection_root: Path,
     collection_id: str,
     year: str | None = None,
+    key_prefix: str | None = None,
 ) -> Iterator[Tuple[Path, str]]:
     """Yield (file_path, object_key): metadata/ first, then data/ by year/month.
 
-    Keys are relative to collection_root (no collection_id prefix) — files land
-    at metadata/... and data/... directly at the bucket root.
+    Keys are relative to collection_root. `key_prefix` is prepended when the
+    collection stores its objects under a top-level prefix instead of at the
+    bucket root; pass None to use the configured default for this collection.
     """
+    if key_prefix is None:
+        key_prefix = get_default_key_prefix(collection_id)
+    prefix = key_prefix.strip("/")
 
     def key_for(p: Path) -> str:
-        return p.relative_to(collection_root).as_posix()
+        rel = p.relative_to(collection_root).as_posix()
+        return f"{prefix}/{rel}" if prefix else rel
 
     # metadata/ always goes first
     metadata_dir = collection_root / "metadata"
@@ -89,6 +110,7 @@ def upload_collection(
     overwrite: bool = False,
     execute: bool = False,
     s3_client=None,
+    key_prefix: str | None = None,
 ) -> dict:
     """Upload a staged collection tree to S3. Dry run unless execute=True."""
     root = Path(root).expanduser().resolve()
@@ -96,7 +118,7 @@ def upload_collection(
         raise FileNotFoundError(f"Collection root not found: {root}")
 
     bucket_name = bucket or get_default_bucket_name(collection_id)
-    pairs = list(iter_upload_pairs(root, collection_id, year=year))
+    pairs = list(iter_upload_pairs(root, collection_id, year=year, key_prefix=key_prefix))
 
     if not pairs:
         logger.warning(
@@ -163,6 +185,12 @@ def main() -> None:
     )
     parser.add_argument("--bucket", help="Override the destination bucket name.")
     parser.add_argument(
+        "--key-prefix",
+        help="Top-level key prefix inside the bucket. Defaults to the configured "
+             "value for this collection ('' for most, the collection ID for HydroLand). "
+             "Pass an empty string to force objects to the bucket root.",
+    )
+    parser.add_argument(
         "--year",
         help="Only upload data/<year>/ (metadata always included).",
     )
@@ -188,6 +216,7 @@ def main() -> None:
         year=args.year,
         overwrite=args.overwrite,
         execute=args.execute,
+        key_prefix=args.key_prefix,
     )
     if stats.get("failed"):
         sys.exit(1)
