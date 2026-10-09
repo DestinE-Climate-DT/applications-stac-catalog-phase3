@@ -83,10 +83,10 @@ catalog_home_dir: /path/to/stac-catalog-output
 simulations:
   - ifs-nemo_generation-2_historical
   - ifs-nemo_generation-2_projection
-  # - ifs-fesom_generation-2_historical
-  # - ifs-fesom_generation-2_projection
-  # - icon_generation-2_historical
-  # - icon_generation-2_projection
+  - ifs-fesom_generation-2_historical
+  - ifs-fesom_generation-2_projection
+  - icon_generation-2_historical
+  - icon_generation-2_projection
 
 # Multi-year indicator products (aridity index, soil moisture, etc.) — see docs/RUN_GUIDE.md
 indicators:

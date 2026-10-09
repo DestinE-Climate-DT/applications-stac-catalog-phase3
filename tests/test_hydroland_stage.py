@@ -62,7 +62,7 @@ def test_parse_monthly_asset_filename():
     assert parsed == {
         "year": "1990", "month": "01",
         "start_timestamp": "19900101T000000",
-        "end_timestamp": "19900131T230000",
+        "end_timestamp": "19900131T235959",
         "data_type": "mhm",
     }
     parsed_daily = stage.parse_monthly_asset_filename(
@@ -71,13 +71,14 @@ def test_parse_monthly_asset_filename():
     assert parsed_daily == {
         "year": "1990", "month": "01",
         "start_timestamp": "19900101T000000",
-        "end_timestamp": "19900131T230000",
+        "end_timestamp": "19900131T235959",
         "data_type": "mhm",
     }
     parsed_mrm = stage.parse_monthly_asset_filename(
         "1990_01_01_T00_00_to_1990_01_31_T23_00_mRM_Fluxes_States.nc"
     )
     assert parsed_mrm["data_type"] == "mrm"
+    assert parsed_mrm["end_timestamp"] == "19900131T230000"
     assert stage.parse_monthly_asset_filename("random.nc") is None
 
 
@@ -157,7 +158,7 @@ def test_create_monthly_skeleton(app_dir):
     assert stats["existing"] == 0
     expected = (
         cfg.collection_dir / "data" / "1990" / "01" /
-        "EO.UFZ.DAT.HYDROLAND_19900101T000000_19900131T230000"
+        "EO.UFZ.DAT.HYDROLAND_19900101T000000_19900131T235959"
         "__IFS-NEMO__hist__generation-2__baseline__realization-1__mhm"
     )
     assert expected.is_dir()
@@ -169,9 +170,15 @@ def test_real_app_config_loads():
     shared simulations.yaml."""
     cfg = load_app_config(REPO_ROOT / "apps" / "hydroland")
     assert cfg.id == "EO.UFZ.DAT.HYDROLAND"
-    # IFS-NEMO historical + projection are published; FESOM/ICON stay commented out
-    # in catalog_config.yaml until their data exists.
-    assert len(cfg.simulations) == 2
+    # All three generation-2 models (IFS-NEMO, IFS-FESOM, ICON) x historical +
+    # projection are enabled. Control runs and storylines stay out by design.
+    assert len(cfg.simulations) == 6
+    assert {s.properties["model"] for s in cfg.simulations} == {
+        "IFS-NEMO", "IFS-FESOM", "ICON",
+    }
+    assert {s.properties["experiment"] for s in cfg.simulations} == {
+        "hist", "SSP3-7.0",
+    }
     assert cfg.property_order == [
         "model", "experiment", "generation", "activity", "realization", "data_type",
     ]

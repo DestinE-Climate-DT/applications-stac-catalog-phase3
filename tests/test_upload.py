@@ -24,9 +24,12 @@ class FakeS3Client:
             raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
         return {}
 
-    def upload_file(self, Filename, Bucket, Key):
+    def upload_file(self, Filename, Bucket, Key, Config=None):
         if self.expected_bucket is not None:
             assert Bucket == self.expected_bucket, f"unexpected bucket: {Bucket!r}"
+        # Multi-GB NetCDF assets need the tuned multipart chunk size, so the
+        # caller is expected to pass one through rather than take boto3 defaults.
+        assert Config is not None, "upload_file called without a TransferConfig"
         self.uploaded.append((Filename, Bucket, Key))
 
 
@@ -136,10 +139,10 @@ def test_non_404_head_error_propagates(collection_root):
 
 def test_failed_upload_counted_and_continues(collection_root):
     class FlakyClient(FakeS3Client):
-        def upload_file(self, Filename, Bucket, Key):
+        def upload_file(self, Filename, Bucket, Key, Config=None):
             if Key.endswith("file_1990_01.nc"):
                 raise ClientError({"Error": {"Code": "503"}}, "PutObject")
-            super().upload_file(Filename, Bucket, Key)
+            super().upload_file(Filename, Bucket, Key, Config=Config)
     client = FlakyClient()
     stats = upload_collection(
         "EO.TEST.DAT.DEMO", collection_root, execute=True, s3_client=client

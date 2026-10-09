@@ -51,6 +51,13 @@ MHM_WITH_TIME_RE = re.compile(
     r"_mHM_Fluxes_States\.nc$"
 )
 
+# End-of-period stamp per data type, matching the items already published on the
+# DEDL: mHM files hold daily means covering the whole last day (23:59:59), while
+# mRM files hold hourly steps whose last stamp is 23:00:00. Some runs (IFS-FESOM
+# historical) name daily mHM files with an hourly-style "_T00_00_to_..._T23_00_"
+# pattern, so the stamp follows the data type, not the filename pattern.
+MONTHLY_END_TIME = {"mhm": "T235959", "mrm": "T230000"}
+
 
 def parse_monthly_asset_filename(file_name: str) -> dict[str, str] | None:
     """Parse one monthly mHM/mRM NetCDF filename into timestamps + data_type."""
@@ -68,13 +75,12 @@ def parse_monthly_asset_filename(file_name: str) -> dict[str, str] | None:
                 f"{p['start_year']}{p['start_month']}{p['start_day']}"
                 f"T{p['start_hour']}{p['start_minute']}00"
             )
-            end = (
-                f"{p['end_year']}{p['end_month']}{p['end_day']}"
-                f"T{p['end_hour']}{p['end_minute']}00"
-            )
         else:
             start = f"{p['start_year']}{p['start_month']}{p['start_day']}T000000"
-            end = f"{p['end_year']}{p['end_month']}{p['end_day']}T230000"
+        end = (
+            f"{p['end_year']}{p['end_month']}{p['end_day']}"
+            f"{MONTHLY_END_TIME[data_type]}"
+        )
         return {
             "year": p["start_year"],
             "month": p["start_month"],
@@ -221,8 +227,11 @@ def create_monthly_skeleton(cfg: AppConfig, execute: bool = False) -> dict[str, 
             for month in range(1, 13):
                 last_day = calendar.monthrange(year, month)[1]
                 start = f"{year}{month:02d}01T000000"
-                end = f"{year}{month:02d}{last_day:02d}T230000"
                 for data_type in data_types:
+                    end = (
+                        f"{year}{month:02d}{last_day:02d}"
+                        f"{MONTHLY_END_TIME.get(data_type, 'T230000')}"
+                    )
                     props = {**base_props, "data_type": data_type}
                     name = build_item_folder_name(
                         cfg.id, start, end,
