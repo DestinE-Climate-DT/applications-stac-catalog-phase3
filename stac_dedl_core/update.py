@@ -39,7 +39,7 @@ def main(app_dir: Path, log_level: str = "INFO") -> int:
 
     # ItemGenerator resolves paths relative to the current working directory.
     os.chdir(cfg.catalog_home_dir)
-    ItemGenerator(cfg.id).run()
+    ItemGenerator(cfg.id, collection_root=cfg.collection_dir.name).run()
 
     items_dir = cfg.collection_dir / "metadata" / "items"
     removed = remove_empty_items(items_dir)

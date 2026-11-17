@@ -118,12 +118,12 @@ stripped out of the item folder names.
 | `item_folder_level` | `MM` | `YYYY` | `MM` | `MM` |
 | `item_config_optional` | `true` | `true` | `true` | `true` |
 | `split_data_type_items` | `true` | `false` | `false` | `true` |
-| Item granularity | monthly, split by `data_type` (mhm/mrm) | **one item per whole 25/35-year period** | monthly, no split | monthly **and** yearly coexist (`data_type`) |
+| Item granularity | monthly, split by `data_type` (mhm/mrm) | **one item per workflow experiment**, over its own period | monthly, no split | monthly **and** yearly coexist (`data_type`) |
 | `property_order` | model, experiment, generation, **activity**, realization | model, experiment, generation, **realization**, activity, resolution | model, experiment, generation, **realization**, activity, resolution | model, experiment, generation, realization, **resolution, activity**, data_type |
 | Property value style | `generation-2`, `realization-1` (prefixed) | bare `2`, `1` | bare `2`, `1` | bare `2`, `1` |
-| `move.py` source shape | one flat folder per data type, OR legacy item-dir with metadata in the folder name | one flat folder per model, metadata-per-file from filename's own start year | `YYYY/MM/` folders, one call per source | one top-level dir containing all model subfolders, auto-discovered |
-| Metadata flags on `move.py` | `--model/--experiment/--generation/--activity/--realization` | `--model/--generation/--realization/--resolution` (experiment/activity derived from filename year) | `--model/--experiment/--generation/--realization/--activity/--resolution` | `--generation/--realization/--resolution` only (model from folder name, experiment/activity from filename year) |
-| Extra per-app feature | decadal `indicators:` (period-level products, separate from monthly mhm/mrm) | two `sci:publications`, full datacube with event-catalogue dimensions | inlined 17-variable datacube extension | none — least-confirmed config (see its notebook) |
+| `move.py` source shape | one flat folder per data type, OR legacy item-dir with metadata in the folder name | Climate DT workflow output (`<member>/EO.DWD.STAT.HYDROMET/data/<YYYY>/<item>/`), names kept as written; optional — the catalog can be built in place | `YYYY/MM/` folders, one call per source | one top-level dir containing all model subfolders, auto-discovered |
+| Metadata flags on `move.py` | `--model/--experiment/--generation/--activity/--realization` | none — period and values come from the workflow's item folder names | `--model/--experiment/--generation/--realization/--activity/--resolution` | `--generation/--realization/--resolution` only (model from folder name, experiment/activity from filename year) |
+| Extra per-app feature | decadal `indicators:` (period-level products, separate from monthly mhm/mrm) | `collection_root_dir: EO.DWD.STAT.HYDROMET` (the workflow's folder, the bucket root), two `sci:publications`, full datacube | inlined 17-variable datacube extension | none — least-confirmed config (see its notebook) |
 
 ## Status of unconfirmed values
 
@@ -206,7 +206,32 @@ All four apps target the same bucket convention:
 `s3://usergenerated-proposal-<collection-id-lowercase>/<COLLECTION_ID>/...`, via
 `stac_dedl_core.upload` (`python -m stac_dedl_core.upload <id> --root <dir> --execute`,
 or `run_pipeline.sh --execute --upload`). Dry run by default; supports a `--year`
-filter for resumable per-year uploads. Requires `.env` credentials — see the
+filter for per-year uploads. Requires `.env` credentials — see the
 top-level README's "Configure credentials" section. None of the four apps have
 actually uploaded through this path yet; all testing so far (including every
 notebook above) is local only: stage → move → update.
+
+### Uploading again: new, unchanged and changed items
+
+The upload keeps no state of its own; it compares every local item with the
+bucket, so results can be uploaded one after another (e.g. one HydroMet workflow
+run at a time) without knowing what was uploaded before:
+
+- **Order.** Collection metadata first, then item by item its data files and its
+  item JSON last. An item is only listed once all its files are there; if a file
+  fails, its JSON is not uploaded and a re-run completes it.
+- **New item** (JSON not in the bucket): uploaded. Files already there with the
+  same size and checksum are skipped, so an interrupted upload resumes.
+- **Unchanged item** (same JSON, same files, sizes and checksums): skipped. Repeating
+  an upload, or uploading with `--year`, is harmless.
+- **Changed item** (e.g. a re-run of the same experiment): a conflict. The upload
+  stops **before anything is sent** and lists the items and why they differ.
+  `--replace` replaces them: the item JSON is deleted first (unpublished), files the
+  new version no longer has are deleted, changed and new files uploaded, and the
+  JSON last. Other items are never touched.
+
+Uploads store an `md5` in each object's metadata. Objects uploaded before that
+are compared by size only. `--overwrite` re-uploads everything, including
+unchanged items and the collection metadata (needed after changing
+`catalog_config.yaml`), but deletes nothing. With `--year`, only items under
+`data/<year>/` are checked and uploaded.

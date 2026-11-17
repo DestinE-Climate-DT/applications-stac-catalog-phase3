@@ -62,16 +62,29 @@ def gen_hydroland(root: Path) -> None:
 
 
 def gen_hydromet(root: Path) -> None:
-    """appdata/ — flat, one model's worth of NC/CSV files.
+    """appdata/<member>/EO.DWD.STAT.HYDROMET/data/<YYYY>/<item>/ — workflow output.
 
-    Matches move.py --source-dir. Filenames must match
-    YYYY_MM_DD_THH_MM_to_YYYY_MM_DD_THH_MM_<token>.{nc,csv}.
+    Two experiments, laid out as the Climate DT workflow writes them with
+    HYDROMET.UPLOAD_READY (get_stac_structure), with the REQUEST values as the
+    item suffix. Matches move.py --source-dir (one member folder each).
     """
-    appdata = root / "appdata"
-    write_nc(appdata / "1990_01_01_T00_00_to_2014_01_01_T00_00_DDF.nc")
-    write_nc(appdata / "1990_01_01_T00_00_to_2014_01_01_T00_00_KO_params.nc")
-    write_csv(appdata / "2020_05_01_T00_00_to_2020_05_03_T00_00_events_T5.csv")
-    print(f"  hydromet: wrote fake appdata under {appdata}")
+    experiments = [
+        ("hist", "19900101", "20141231", "1990_01_01", "2014_12_31"),
+        ("ssp370", "20150101", "20491231", "2015_01_01", "2049_12_31"),
+    ]
+    for member, start, end, fstart, fend in experiments:
+        experiment, activity = ("hist", "baseline") if member == "hist" else ("SSP3-7.0", "projections")
+        item = (
+            root / "appdata" / member / "EO.DWD.STAT.HYDROMET" / "data" / start[:4] /
+            f"EO.DWD.STAT.HYDROMET_EXTREMES_{start}T000000_{end}T230000"
+            f"__IFS-NEMO__{experiment}__2__1__{activity}__high"
+        )
+        period = f"{fstart}_T00_00_to_{fend[:4]}_01_01_T00_00"
+        write_nc(item / f"{period}_KO_params.nc")
+        write_nc(item / f"{period}_DDF.nc")
+        for region in ("neu", "med"):
+            write_csv(item / f"{fstart}_T00_00_to_{fend}_T23_00_events_T5_{region}.csv")
+    print(f"  hydromet: wrote fake workflow output under {root / 'appdata'}")
 
 
 def gen_fwi(root: Path) -> None:

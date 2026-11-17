@@ -8,6 +8,15 @@
 
 id: "EO.DWD.STAT.HYDROMET_EXTREMES"
 
+# Local folder (under catalog_home_dir) holding metadata/ and data/. It is the
+# folder the Climate DT workflow writes (<member>/EO.DWD.STAT.HYDROMET/, see
+# get_stac_structure in the workflow's lib/common/utils/app_utils.sh) and the
+# root of the bucket: its contents land at the root of
+# s3://usergenerated-proposal-eo.dwd.stat.hydromet-extremes/ (data/, metadata/;
+# derived from `id`, confirmed by DWD) on upload, so it is
+# not an extra folder level. Item and collection ids still use `id` above.
+collection_root_dir: "EO.DWD.STAT.HYDROMET"
+
 title: "HydroMet: Catalog of extreme precipitation events"
 
 description: >
@@ -78,17 +87,17 @@ stac_extensions:
 
 bbox: [-21.0, 27.025, 45.0, 71.975]
 
-# Items are organised data/<start_year>/<item>/ — ONE item per simulation period
-# (historical 1990-2014 or projection 2015-2049), not split by month like HydroLand
-# or Energy. A single item can have many assets: the DDF/KO_params NC files plus
-# potentially thousands of individual extreme-event CSV files for that period.
+# Items are organised data/<start_year>/<item>/ — ONE item per workflow experiment,
+# covering the experiment's own period (from its DATELIST and length), not split
+# by month like HydroLand or Energy. A single item has the DDF/KO_params NC files
+# plus one extreme-event CSV file per region for that period.
 item_folder_level: YYYY
 item_config_optional: true
 split_data_type_items: false
 
-# Folder/item suffix order and bare (non-prefixed) values match the original
-# staging script (stac_hda_hydromet.py) exactly: <id>_<start>_<end>__model__
-# experiment__generation__realization__activity__resolution, with plain values
+# Folder/item suffix order and bare (non-prefixed) values match the item folders
+# the workflow writes: <id>_<start>_<end>__model__experiment__generation__
+# realization__activity__resolution, with its REQUEST values as they are
 # (no "generation-"/"realization-" prefix, unlike HydroLand's convention).
 property_order:
   - model
@@ -102,7 +111,15 @@ property_order:
 app_data_dir: /path/to/hydromet/output  # no known DWD production path yet — override locally
 catalog_home_dir: /work/lealroja/applications-stac-catalog-phase3-execution
 
-# All three Climate DT models, both periods.
+# Temporal extent of the collection, set explicitly to cover all workflow
+# experiments (historical, projections and storylines), matching the datacube
+# `time` extent below.
+temporal_start: "1990-01-01T00:00:00Z"
+temporal_end: "2049-12-31T23:00:00Z"
+
+# Unused for HydroMet: the temporal extent is set above and item folders come
+# from the workflow, with its own periods and REQUEST values (see
+# staging/workflow_items.py). Kept because load_app_config requires at least one.
 simulations:
   - ifs-nemo_generation-2_historical
   # - ifs-nemo_generation-2_projection
@@ -110,10 +127,6 @@ simulations:
   # - ifs-fesom_generation-2_projection
   # - icon_generation-2_historical
   # - icon_generation-2_projection
-
-# resolution is app-specific (not in the shared simulation entry).
-overrides:
-  resolution: 5km
 
 # STAC datacube extension (cube:dimensions / cube:variables), inlined so all
 # collection config lives in one file. Read by stac_dedl_core.collection_builder.

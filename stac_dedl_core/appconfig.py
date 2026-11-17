@@ -113,10 +113,16 @@ class AppConfig:
     # "data_type" to assign. First match wins; see staging.classify_data_type.
     # Any app can use this; it only takes effect when split_data_type_items is true.
     data_type_rules: list = field(default_factory=list)
+    # Optional name of the local folder under catalog_home_dir that holds
+    # metadata/ and data/. Its contents become the bucket root on upload, so it
+    # need not equal the collection id. HydroMet uses the folder the Climate DT
+    # workflow writes (EO.DWD.STAT.HYDROMET) for the collection
+    # EO.DWD.STAT.HYDROMET_EXTREMES. Defaults to the collection id.
+    collection_root_dir: str | None = None
 
     @property
     def collection_dir(self) -> Path:
-        return self.catalog_home_dir / self.id
+        return self.catalog_home_dir / (self.collection_root_dir or self.id)
 
 
 def _load_yaml(path: Path) -> dict:
@@ -225,6 +231,15 @@ def load_app_config(
             "simulation under `simulations:`"
         )
 
+    collection_root_dir = cfg.get("collection_root_dir") or None
+    if collection_root_dir is not None:
+        collection_root_dir = str(collection_root_dir)
+        if Path(collection_root_dir).name != collection_root_dir or collection_root_dir in (".", ".."):
+            raise ValueError(
+                f"collection_root_dir '{collection_root_dir}' must be a single folder "
+                "name (no path separators); it is created under catalog_home_dir."
+            )
+
     split = bool(cfg.get("split_data_type_items", False))
     published_data_type_key = cfg.get("published_data_type_key") or None
     property_order = _derive_property_order(
@@ -288,4 +303,5 @@ def load_app_config(
         datacube=cfg.get("datacube"),
         publications=cfg.get("publications") or [],
         stac_extensions=cfg.get("stac_extensions"),
+        collection_root_dir=collection_root_dir,
     )

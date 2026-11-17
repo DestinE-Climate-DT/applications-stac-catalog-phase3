@@ -34,7 +34,7 @@ count_items() {  # $1 = items dir
   echo "  -> generated ${n} item JSON(s) in $1"
 }
 
-run_app() {  # $1=app dir name  $2=collection id  $3...=extra move.py args (after --source-* and before --link)
+run_app() {  # $1=app dir name  $2=collection root folder (usually the id)  $3...=extra move.py args (after --source-* and before --link)
   local app="$1" id="$2"; shift 2
   local SB="${SB_ROOT}/${app}"
   mkdir -p "${SB}"
@@ -82,8 +82,9 @@ run_hydroland() {
 
 run_hydromet() {
   hr "HydroMet"
-  run_app hydromet "EO.DWD.STAT.HYDROMET_EXTREMES" \
-    --source-dir "${SB_ROOT}/hydromet/appdata" --model IFS-NEMO --generation 2 --realization 1 --resolution 5km
+  # The collection root is the workflow's folder (collection_root_dir), not the id.
+  run_app hydromet "EO.DWD.STAT.HYDROMET" \
+    --source-dir "${SB_ROOT}/hydromet/appdata/hist" --source-dir "${SB_ROOT}/hydromet/appdata/ssp370"
 }
 
 run_fwi() {

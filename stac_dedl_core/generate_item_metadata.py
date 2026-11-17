@@ -59,6 +59,7 @@ class ItemGenerator:
         is_skip_metadata_upload: bool = False,
         is_upload_only: bool = False,
         is_clean_items_dir: bool = False,
+        collection_root: Optional[str] = None,
     ) -> None:
         """
         Class to generate STAC Item metadata for a given collection.
@@ -73,6 +74,10 @@ class ItemGenerator:
         Args:
             collection_id: The collection identifier to process
             overide_bucket_name: Optional override for the S3 bucket name
+            collection_root: Optional name of the local folder (relative to the
+                current working directory) holding metadata/ and data/.
+                Defaults to collection_id. Item and collection ids always use
+                collection_id, never this folder name.
 
         Raises:
             ValueError: If collection_id contains dash or credentials are not set
@@ -93,19 +98,26 @@ class ItemGenerator:
         self.is_upload_only = is_upload_only
         self.is_clean_items_dir = is_clean_items_dir
 
-        # Path to root of all collection related data: used when uploading to S3 bucket
-        self.collection_root = Path(collection_id)
+        # Path to root of all collection related data: used when uploading to S3 bucket.
+        # Must stay a single relative component: item folder paths are split on
+        # os.sep and indexed (root/data/YYYY/...) further down.
+        self.collection_root = Path(collection_root or collection_id)
+        if len(self.collection_root.parts) != 1 or self.collection_root.is_absolute():
+            raise ValueError(
+                f"collection_root must be a single folder name relative to the "
+                f"working directory, got '{self.collection_root}'."
+            )
 
         # Path to collection.json STAC file
-        self.collection_path = Path(f"{collection_id}/metadata/collection.json")
+        self.collection_path = self.collection_root / "metadata" / "collection.json"
         # Path to collection level config file, containing global config when generating Item metadata
-        self.collection_config_path = Path(
-            f"{collection_id}/metadata/collection_config.json"
+        self.collection_config_path = (
+            self.collection_root / "metadata" / "collection_config.json"
         )
         # Path to expected folder where STAC Item (feature) metadata will be generated
-        self.items_root = Path(f"{collection_id}/metadata/items")
+        self.items_root = self.collection_root / "metadata" / "items"
         # Path to expected data folder which is used to generate the Item metadata
-        self.data_root = Path(f"{collection_id}/data")
+        self.data_root = self.collection_root / "data"
 
         ##### Initialise S3Tools object to handle S3 interaction #####
 
@@ -449,7 +461,9 @@ class ItemGenerator:
             # Extract item ID and date components from the folder path
             item_id = item_folder_path.name
             item_folder_path_parts = str(item_folder_path).split(os.path.sep)
-            collection_id = item_folder_path_parts[0]
+            # The local root folder may be named differently from the collection
+            # (e.g. after the bucket), so the id comes from the generator.
+            collection_id = self.collection_id
 
             # Simplified Process: Prefix with real collection id if folder name does not start with it.
             if not item_id.startswith(collection_id):
@@ -588,7 +602,9 @@ class ItemGenerator:
             # Extract item ID and date components from the folder path
             item_id = item_folder_path.name
             item_folder_path_parts = str(item_folder_path).split(os.path.sep)
-            collection_id = item_folder_path_parts[0]
+            # The local root folder may be named differently from the collection
+            # (e.g. after the bucket), so the id comes from the generator.
+            collection_id = self.collection_id
 
             ###################################################################
             ###### Initialise datetime_from_folder_path                   #####
