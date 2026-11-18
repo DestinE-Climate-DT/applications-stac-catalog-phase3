@@ -11,7 +11,7 @@ dependencies = [
     "pystac==1.16.0",
     "pystac[validation, orjson]==1.16.0",
     "jsonschema==4.26.0",
-    "orjson==3.13.0"
+    "orjson==3.13.0",
     "shapely==2.2.0",
     "python-magic==0.4.27",
     "requests==2.34.2",
