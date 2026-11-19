@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """HydroMet staging on top of stac_dedl_core.
 
-Reads ../catalog_config.yaml, writes collection metadata, and creates one
-period-level item folder per simulation under data/<start_year>/<item>/.
+Reads ../catalog_config.yaml and writes metadata/collection.json and
+metadata/collection_config.json into the collection root
+(<CATALOG_HOME_DIR>/<collection_root_dir>, i.e. EO.DWD.STAT.HYDROMET, the
+folder the Climate DT workflow writes and the root of the bucket).
 
-Unlike HydroLand or Energy, HydroMet uses item_folder_level: YYYY — each item
-spans a WHOLE simulation period (1990-2014 historical or 2015-2049
-projection), not a single month. A single item can end up with many assets:
-the DDF/KO_params NC files plus potentially thousands of individual extreme-
-event CSV files for that period (see move.py).
+Unlike the other apps, HydroMet does not create item folders: the workflow
+already writes data/<YYYY>/<item>/, named after the experiment's own period and
+REQUEST values (see workflow_items.py). This script only lists the item
+folders it finds and reports any whose name does not follow that scheme, as
+update.py would fail on them.
 
 Dry run by default; pass --execute to apply changes.
 """
@@ -20,44 +22,34 @@ from pathlib import Path
 
 from stac_dedl_core.appconfig import AppConfig, load_app_config
 from stac_dedl_core.collection_builder import write_collection_files
-from stac_dedl_core.staging import (
-    join_item_folder_name,
-    ordered_properties,
-    safe_slug,
-    setup_logging,
-)
+from stac_dedl_core.staging import setup_logging
+from workflow_items import find_item_dirs, load_item
 
 APP_DIR = Path(__file__).resolve().parents[1]
 
 logger = logging.getLogger("hydromet-stage")
 
 
-def create_period_skeleton(cfg: AppConfig, execute: bool = False) -> dict[str, int]:
-    """Create data/<start_year>/<item>/ — one folder per simulation."""
-    stats: dict[str, int] = {"total": 0, "created": 0, "existing": 0}
+def report_items(cfg: AppConfig) -> dict[str, int]:
+    """List the workflow item folders under data/ and flag invalid names."""
+    stats: dict[str, int] = {"items": 0, "invalid": 0}
     data_dir = cfg.collection_dir / "data"
+    if not data_dir.is_dir():
+        logger.info("No data/ folder yet in %s", cfg.collection_dir)
+        return stats
 
-    for sim in cfg.simulations:
-        props = ordered_properties(sim.properties, cfg.property_order)
-        # Bare property values (no "generation-"/"realization-" prefix), matching
-        # the original staging script's plain string-concatenation convention.
-        suffix_parts = [safe_slug(v) for v in props.values()]
-        start = f"{sim.start_year}0101T000000"
-        end = f"{sim.end_year}1231T230000"
-        name = join_item_folder_name(cfg.id, start, end, suffix_parts)
-        item_dir = data_dir / str(sim.start_year) / name
-
-        stats["total"] += 1
-        if item_dir.exists():
-            stats["existing"] += 1
-            logger.info("Already exists: %s", item_dir)
-        elif execute:
-            item_dir.mkdir(parents=True, exist_ok=True)
-            stats["created"] += 1
-            logger.info("Created: %s", item_dir)
-        else:
-            logger.info("[DRY RUN] would create: %s", item_dir)
-
+    for item_dir in find_item_dirs(data_dir):
+        stats["items"] += 1
+        try:
+            item = load_item(item_dir, cfg.id, cfg.property_order)
+        except ValueError as exc:
+            stats["invalid"] += 1
+            logger.error("Invalid item folder %s: name %s", item_dir, exc)
+            continue
+        logger.info(
+            "Item %s/%s (%s to %s)", item.year_folder, item.name,
+            f"{item.start:%Y-%m-%d}", f"{item.end:%Y-%m-%d}",
+        )
     return stats
 
 
@@ -77,7 +69,7 @@ def main() -> int:
     setup_logging("hydromet-stage", args.log_level)
 
     cfg = load_app_config(APP_DIR)
-    logger.info("Collection: %s (%s simulations)", cfg.id, len(cfg.simulations))
+    logger.info("Collection: %s in %s", cfg.id, cfg.collection_dir)
 
     if args.execute:
         collection_path, config_path = write_collection_files(cfg, overwrite=True)
@@ -85,12 +77,12 @@ def main() -> int:
     else:
         logger.info("[DRY RUN] Would write collection.json + collection_config.json")
 
-    stats = create_period_skeleton(cfg, execute=args.execute)
-    logger.info("Skeleton: %s", stats)
+    stats = report_items(cfg)
+    logger.info("Workflow items: %s", stats)
 
     if not args.execute:
         logger.info("Dry run complete. Re-run with --execute to apply.")
-    return 0
+    return 1 if stats["invalid"] else 0
 
 
 if __name__ == "__main__":

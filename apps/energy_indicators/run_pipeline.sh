@@ -8,6 +8,7 @@
 #   bash run_pipeline.sh --execute          # stage + generate items
 #   bash run_pipeline.sh --execute --upload # stage + generate + upload
 #   bash run_pipeline.sh --execute --upload --year 2016
+#   bash run_pipeline.sh --execute --upload --replace   # replace published items that changed
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,16 +23,23 @@ fi
 
 EXECUTE=0
 UPLOAD=0
+REPLACE=0
 YEAR=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --execute) EXECUTE=1 ;;
     --upload)  UPLOAD=1 ;;
+    --replace) REPLACE=1 ;;
     --year)    [[ "$2" =~ ^[0-9]{4}$ ]] || { echo "--year must be a 4-digit year" >&2; exit 1; }; YEAR="$2"; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
   shift
 done
+
+if [ "${REPLACE}" -eq 1 ] && [ "${UPLOAD}" -eq 0 ]; then
+  echo "--replace only applies to --upload" >&2
+  exit 1
+fi
 
 if [ "${UPLOAD}" -eq 1 ] && [ "${EXECUTE}" -eq 0 ]; then
   echo "--upload requires --execute (items must be generated before uploading)" >&2
@@ -55,6 +63,7 @@ if [ "${UPLOAD}" -eq 1 ]; then
   echo "=== Step 3: Upload to DEDL S3 ==="
   UPLOAD_ARGS=("${COLLECTION_ID}" --root "${CATALOG_HOME_DIR}/${COLLECTION_ID}" --execute)
   [ -n "${YEAR}" ] && UPLOAD_ARGS+=(--year "${YEAR}")
+  [ "${REPLACE}" -eq 1 ] && UPLOAD_ARGS+=(--replace)
   python -m stac_dedl_core.upload "${UPLOAD_ARGS[@]}"
 fi
 

@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# Pre-staging QC for HydroMet source data.
+# Pre-staging QC for HydroMet workflow output.
 #
 # Usage: bash check_data.sh <source_dir>
-#   source_dir: flat directory of .nc/.csv files for one model (same dir
-#               you'd pass to move.py --source-dir)
+#   source_dir: what the Climate DT workflow wrote — the EO.DWD.STAT.HYDROMET
+#               folder, the member folder holding it, or its data/ folder
+#               (same as move.py --source-dir).
 #
-# Checks:
-#   - DDF.nc and KO_params.nc are present for the historical period (1990-2014)
-#   - DDF.nc and KO_params.nc are present for the projection period (2015-2049)
-#   - reports how many event catalogue CSVs were found per period
-#   - flags any .nc/.csv file that doesn't match the expected filename pattern
-#     (YYYY_MM_DD_THH_MM_to_YYYY_MM_DD_THH_MM_<token>.{nc,csv})
+# For every item folder data/<YYYY>/<item>/ it checks:
+#   - the item name is EO.DWD.STAT.HYDROMET_EXTREMES_<start>_<end>__<6 values>
+#     (model, experiment, generation, realization, activity, resolution)
+#   - the year folder is the start year of the item
+#   - a *_KO_params.nc and a *_DDF.nc file are present (Kostradamus)
+#   - how many event catalogue CSVs (one per region) are present
+#   - every file starts with its <start>_to_<end> period
 set -euo pipefail
+
+COLLECTION_ID="EO.DWD.STAT.HYDROMET_EXTREMES"
+ROOT_DIR_NAME="EO.DWD.STAT.HYDROMET"
 
 SRC="${1:-}"
 if [ -z "${SRC}" ]; then
@@ -23,46 +28,66 @@ if [ ! -d "${SRC}" ]; then
   exit 1
 fi
 
-PATTERN='^[0-9]{4}_[0-9]{2}_[0-9]{2}_T[0-9]{2}_[0-9]{2}_to_[0-9]{4}_[0-9]{2}_[0-9]{2}_T[0-9]{2}_[0-9]{2}_.+\.(nc|csv)$'
-
-echo "=== Checking ${SRC} ==="
-
-for token in DDF KO_params; do
-  for period in "historical:1990:2014" "projection:2015:2049"; do
-    name="${period%%:*}"
-    rest="${period#*:}"
-    start_year="${rest%%:*}"
-    end_year="${rest##*:}"
-    count=$(find "${SRC}" -maxdepth 1 -type f -regextype posix-extended \
-      -regex ".*/${start_year}_.*_${token}\.nc" 2>/dev/null | wc -l)
-    if [ "${count}" -eq 0 ]; then
-      echo "MISSING: ${token}.nc for ${name} (${start_year}-${end_year})"
-    else
-      echo "OK: ${token}.nc for ${name} (${start_year}-${end_year}) — ${count} file(s)"
-    fi
-  done
-done
-
-echo "--- Event catalogue CSVs ---"
-hist_csv=$(find "${SRC}" -maxdepth 1 -type f -name "*.csv" -regextype posix-extended \
-  -regex '.*/19[0-9][0-9]_.*\.csv|.*/20(0[0-9]|1[0-4])_.*\.csv' 2>/dev/null | wc -l)
-proj_csv=$(find "${SRC}" -maxdepth 1 -type f -name "*.csv" -regextype posix-extended \
-  -regex '.*/20(1[5-9]|[2-4][0-9])_.*\.csv' 2>/dev/null | wc -l)
-echo "historical (1990-2014): ${hist_csv} event CSV(s)"
-echo "projection (2015-2049): ${proj_csv} event CSV(s)"
-
-echo "--- Unrecognized filenames ---"
-unrecognized=0
-while IFS= read -r -d '' f; do
-  base="$(basename "${f}")"
-  if ! [[ "${base}" =~ ${PATTERN} ]]; then
-    echo "UNRECOGNIZED: ${base}"
-    unrecognized=$((unrecognized + 1))
-  fi
-done < <(find "${SRC}" -maxdepth 1 -type f \( -name "*.nc" -o -name "*.csv" \) -print0)
-
-if [ "${unrecognized}" -eq 0 ]; then
-  echo "(none)"
+if [ "$(basename "${SRC}")" == "data" ]; then
+  DATA="${SRC}"
+elif [ -d "${SRC}/data" ]; then
+  DATA="${SRC}/data"
+elif [ -d "${SRC}/${ROOT_DIR_NAME}/data" ]; then
+  DATA="${SRC}/${ROOT_DIR_NAME}/data"
+else
+  echo "No data/ folder in ${SRC} or ${SRC}/${ROOT_DIR_NAME}" >&2
+  exit 1
 fi
 
-echo "=== Done ==="
+ID_RE="${COLLECTION_ID//./\\.}"
+ITEM_RE="^${ID_RE}_([0-9]{8})T[0-9]{6}_([0-9]{8})T[0-9]{6}(__[^_]+(_[^_]+)*){6}$"
+FILE_RE='^[0-9]{4}_[0-9]{2}_[0-9]{2}_T[0-9]{2}_[0-9]{2}_to_[0-9]{4}_[0-9]{2}_[0-9]{2}_T[0-9]{2}_[0-9]{2}_.+\.(nc|csv)$'
+
+echo "=== Checking ${DATA} ==="
+problems=0
+items=0
+
+while IFS= read -r -d '' item; do
+  items=$((items + 1))
+  name="$(basename "${item}")"
+  year="$(basename "$(dirname "${item}")")"
+  echo "--- ${year}/${name}"
+
+  # Exactly six __ separated values: count the "__" separators
+  suffix="${name#*__}"
+  n_values=$(( $(grep -o "__" <<<"__${suffix}" | wc -l) ))
+  if ! [[ "${name}" =~ ${ITEM_RE} ]] || [ "${n_values}" -ne 6 ]; then
+    echo "INVALID NAME: expected ${COLLECTION_ID}_<start>_<end>__model__experiment__generation__realization__activity__resolution"
+    problems=$((problems + 1))
+  else
+    start="${BASH_REMATCH[1]}"
+    end="${BASH_REMATCH[2]}"
+    echo "period: ${start} to ${end}"
+    if [ "${year}" != "${start:0:4}" ]; then
+      echo "WRONG YEAR FOLDER: ${year}, item starts in ${start:0:4}"
+      problems=$((problems + 1))
+    fi
+  fi
+
+  for token in KO_params DDF; do
+    count=$(find "${item}" -maxdepth 1 -type f -name "*_${token}.nc" | wc -l)
+    if [ "${count}" -eq 0 ]; then
+      echo "MISSING: *_${token}.nc"
+      problems=$((problems + 1))
+    else
+      echo "OK: *_${token}.nc (${count})"
+    fi
+  done
+  echo "event CSVs: $(find "${item}" -maxdepth 1 -type f -name "*_events_*.csv" | wc -l)"
+
+  while IFS= read -r -d '' f; do
+    base="$(basename "${f}")"
+    if ! [[ "${base}" =~ ${FILE_RE} ]]; then
+      echo "UNRECOGNIZED FILE: ${base}"
+      problems=$((problems + 1))
+    fi
+  done < <(find "${item}" -type f -print0)
+done < <(find "${DATA}" -mindepth 2 -maxdepth 2 -type d -print0 | sort -z)
+
+echo "=== ${items} item(s), ${problems} problem(s) ==="
+[ "${items}" -gt 0 ] && [ "${problems}" -eq 0 ]
